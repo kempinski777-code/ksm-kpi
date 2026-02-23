@@ -27,6 +27,2281 @@
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KSM KPI | Группа компаний KSM</title>
+
+<!-- Firebase SDK (compat v9) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<style>
+  :root {
+    --dark-blue: #1F4E79;
+    --mid-blue:  #2E75B6;
+    --light-blue:#BDD7EE;
+    --yellow:    #FFFF99;
+    --green-bg:  #E2EFDA;
+    --green-kpi: #00B050;
+    --yellow-kpi:#FFC107;
+    --orange-kpi:#FFC000;
+    --red-kpi:   #FF0000;
+    --note-bg:   #FFF2CC;
+    --border:    #B0BEC5;
+    --white:     #FFFFFF;
+    --font:      'Segoe UI', Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font);
+    font-size: 13px;
+    background: #f0f4f8;
+    color: #222;
+    min-height: 100vh;
+  }
+
+  /* ---- APP SHELL ---- */
+  #app { display: flex; flex-direction: column; min-height: 100vh; }
+
+  header {
+    background: var(--dark-blue);
+    color: #fff;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.3);
+    position: sticky; top: 0; z-index: 100;
+  }
+  header h1 { font-size: 18px; font-weight: 700; letter-spacing: .5px; }
+  header .subtitle { font-size: 12px; opacity: .75; margin-top: 2px; }
+  header .logo { font-size: 28px; }
+  header .spacer { flex: 1; }
+  header .period-badge {
+    background: rgba(255,255,255,.15);
+    border: 1px solid rgba(255,255,255,.3);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  /* ---- TABS ---- */
+  nav.tabs {
+    background: var(--dark-blue);
+    display: flex;
+    gap: 2px;
+    padding: 0 24px;
+    border-top: 1px solid rgba(255,255,255,.1);
+    overflow-x: auto;
+  }
+  nav.tabs button {
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,.7);
+    padding: 10px 16px;
+    font-size: 12px;
+    font-family: var(--font);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    white-space: nowrap;
+    transition: all .15s;
+  }
+  nav.tabs button:hover { color: #fff; }
+  nav.tabs button.active {
+    color: #fff;
+    border-bottom-color: #4FC3F7;
+    font-weight: 600;
+  }
+
+  /* ---- MAIN CONTENT ---- */
+  main { flex: 1; padding: 20px 24px; max-width: 1400px; margin: 0 auto; width: 100%; }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ---- CARDS ---- */
+  .card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.1);
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+  .card-header {
+    background: var(--dark-blue);
+    color: #fff;
+    padding: 10px 16px;
+    font-weight: 700;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-subheader {
+    background: var(--mid-blue);
+    color: #fff;
+    padding: 7px 16px;
+    font-weight: 600;
+    font-size: 12px;
+  }
+  .card-body { padding: 16px; }
+
+  /* ---- TABLES ---- */
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  th {
+    background: var(--light-blue);
+    padding: 8px 10px;
+    text-align: center;
+    font-weight: 700;
+    border: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  th.left { text-align: left; }
+  td {
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    text-align: center;
+    vertical-align: middle;
+  }
+  td.left { text-align: left; }
+  tr:nth-child(even) td { background: #F8FBFF; }
+  tr:hover td { background: #EEF6FF; }
+
+  /* ---- INPUTS ---- */
+  input[type=number], input[type=text], select {
+    border: 1px solid #aaa;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-family: var(--font);
+    width: 100%;
+    background: var(--yellow);
+    transition: border-color .15s, box-shadow .15s;
+  }
+  input[type=number]:focus, input[type=text]:focus, select:focus {
+    outline: none;
+    border-color: var(--mid-blue);
+    box-shadow: 0 0 0 2px rgba(46,117,182,.2);
+  }
+  select { background: var(--yellow); cursor: pointer; }
+  .cell-formula {
+    background: var(--green-bg);
+    font-weight: 600;
+    color: #1a5c1a;
+    border-radius: 3px;
+    padding: 3px 8px;
+    display: inline-block;
+    min-width: 60px;
+    text-align: center;
+  }
+
+  /* ---- KPI TRAFFIC LIGHT ---- */
+  .kpi-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 12px;
+    color: #fff;
+    min-width: 64px;
+    text-align: center;
+  }
+  .kpi-green  { background: var(--green-kpi); }
+  .kpi-yellow { background: #E6A817; color: #fff; }
+  .kpi-orange { background: var(--orange-kpi); color: #fff; }
+  .kpi-red    { background: var(--red-kpi); }
+
+  .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+  .dot-green  { background: var(--green-kpi); }
+  .dot-yellow { background: #E6A817; }
+  .dot-orange { background: var(--orange-kpi); }
+  .dot-red    { background: var(--red-kpi); }
+
+  /* ---- MANAGER SECTION IN INPUT TAB ---- */
+  .mgr-section {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+  .mgr-header {
+    background: var(--mid-blue);
+    color: #fff;
+    padding: 10px 16px;
+    font-weight: 700;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .mgr-header .mgr-kpi-live {
+    margin-left: auto;
+    font-size: 15px;
+    font-weight: 800;
+  }
+  .mgr-body { padding: 16px; display: block; }
+  .mgr-body.collapsed { display: none; }
+  .chevron { transition: transform .2s; display: inline-block; }
+  .collapsed-header .chevron { transform: rotate(-90deg); }
+
+  /* ---- BLOCKS A/B/C ---- */
+  .block-label {
+    font-weight: 700;
+    font-size: 11px;
+    color: var(--mid-blue);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin: 12px 0 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .block-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--light-blue);
+  }
+
+  /* ---- SAFETY GATE ---- */
+  .sg-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .sg-item { display: flex; flex-direction: column; gap: 4px; }
+  .sg-item label { font-size: 11px; color: #555; font-weight: 600; }
+  .sg-badge { padding: 6px 10px; border-radius: 6px; font-weight: 700; text-align: center; }
+  .sg-A { background: #E8F5E9; color: #2E7D32; border: 1px solid #A5D6A7; }
+  .sg-B { background: #FFF8E1; color: #E65100; border: 1px solid #FFCC02; }
+  .sg-C { background: #FFEBEE; color: #B71C1C; border: 1px solid #EF9A9A; }
+
+  /* ---- DASHBOARD CARDS ---- */
+  .dash-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .dash-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    transition: transform .15s, box-shadow .15s;
+  }
+  .dash-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+  .dash-card .dc-name { font-size: 12px; font-weight: 700; color: #333; margin-bottom: 2px; }
+  .dash-card .dc-role { font-size: 10px; color: #888; margin-bottom: 10px; }
+  .dash-card .dc-kpi  { font-size: 28px; font-weight: 800; }
+  .dash-card .dc-sg   { font-size: 10px; margin-top: 6px; }
+
+  /* ---- PROGRESS BAR ---- */
+  .progress-wrap { background: #e0e0e0; border-radius: 20px; height: 16px; overflow: hidden; }
+  .progress-bar { height: 100%; border-radius: 20px; transition: width .4s ease; display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; font-size: 10px; color: #fff; font-weight: 700; }
+
+  /* ---- QUARTERLY TABLE ---- */
+  .quarter-summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  /* ---- NOTE ---- */
+  .note {
+    background: var(--note-bg);
+    border-left: 4px solid #F9A825;
+    padding: 10px 14px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: #555;
+    margin-bottom: 12px;
+  }
+
+  /* ---- SETTINGS ---- */
+  .settings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .settings-table input[type=number] { width: 80px; }
+
+  /* ---- BUTTONS ---- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .btn-primary { background: var(--mid-blue); color: #fff; }
+  .btn-primary:hover { background: var(--dark-blue); }
+  .btn-success { background: var(--green-kpi); color: #fff; }
+  .btn-success:hover { background: #008040; }
+  .btn-outline { background: #fff; color: var(--mid-blue); border: 1px solid var(--mid-blue); }
+  .btn-outline:hover { background: var(--light-blue); }
+  .btn-sm { padding: 5px 10px; font-size: 11px; }
+
+  /* ---- WEEK SELECTOR ---- */
+  .week-bar {
+    background: #fff;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.1);
+    flex-wrap: wrap;
+  }
+  .week-bar label { font-weight: 600; font-size: 12px; color: #555; }
+  .week-bar select, .week-bar input { width: auto; min-width: 80px; }
+
+  /* ---- FORMULA EXPLANATION ---- */
+  .formula-box {
+    background: #F3F8FF;
+    border: 1px solid var(--light-blue);
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 11px;
+    line-height: 1.8;
+    margin-bottom: 16px;
+  }
+  .formula-box code {
+    background: #e8f0fe;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 11px;
+  }
+
+  /* ---- RESPONSIVE ---- */
+  @media (max-width: 768px) {
+    .settings-grid { grid-template-columns: 1fr; }
+    .quarter-summary { grid-template-columns: 1fr; }
+    .sg-grid { grid-template-columns: 1fr 1fr; }
+    main { padding: 12px; }
+  }
+
+  /* ---- PRINT ---- */
+  @media print {
+    nav.tabs, header { position: static; }
+    .tab-panel { display: block !important; }
+    .btn { display: none; }
+  }
+
+  /* ---- HISTORY TABLE ---- */
+  .history-wrap { overflow-x: auto; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #f0f4f8; }
+  ::-webkit-scrollbar-thumb { background: #b0bec5; border-radius: 3px; }
+
+  .total-row td { background: var(--dark-blue) !important; color: #fff; font-weight: 700; }
+  .sub-total-row td { background: var(--light-blue) !important; font-weight: 700; }
+
+  /* ---- SETUP SCREEN ---- */
+  #setupScreen {
+    position: fixed; inset: 0; background: linear-gradient(135deg,#1F4E79 0%,#2E75B6 100%);
+    display: flex; align-items: center; justify-content: center; z-index: 9999;
+  }
+  .setup-card {
+    background: #fff; border-radius: 16px; padding: 40px 48px;
+    width: 480px; box-shadow: 0 20px 60px rgba(0,0,0,.4); text-align: center;
+  }
+  .setup-card h2 { color: var(--dark-blue); font-size: 22px; margin-bottom: 4px; }
+  .setup-card .sub { color: #888; font-size: 13px; margin-bottom: 32px; }
+  .setup-section { margin-bottom: 24px; text-align: left; }
+  .setup-section label { font-weight: 700; font-size: 12px; color: #555; display: block; margin-bottom: 6px; }
+  .setup-section input, .setup-section select {
+    width: 100%; padding: 10px 14px; border: 1px solid #ccc;
+    border-radius: 8px; font-size: 14px; background: #fff;
+  }
+  .setup-section input:focus, .setup-section select:focus {
+    outline: none; border-color: var(--mid-blue);
+    box-shadow: 0 0 0 3px rgba(46,117,182,.15);
+  }
+  .setup-divider { text-align:center; color:#aaa; font-size:12px; margin:16px 0;
+    display:flex; align-items:center; gap:10px; }
+  .setup-divider::before,.setup-divider::after { content:''; flex:1; height:1px; background:#e0e0e0; }
+  .setup-config {
+    background: #F8FBFF; border: 1px solid var(--light-blue);
+    border-radius: 8px; padding: 16px; margin-bottom: 20px; text-align: left;
+  }
+  .setup-config code {
+    display: block; font-family: monospace; font-size: 11px;
+    color: #333; background: #eef3f8; padding: 8px; border-radius: 4px;
+    word-break: break-all; margin-top: 6px;
+  }
+  .config-steps { text-align:left; font-size:12px; line-height:2; color:#444; }
+  .config-steps b { color: var(--dark-blue); }
+
+  /* ---- SYNC STATUS BAR ---- */
+  #syncBar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    transition: all .3s;
+  }
+  .sync-ok     { background: #E8F5E9; color: #2E7D32; }
+  .sync-saving { background: #FFF8E1; color: #E65100; }
+  .sync-error  { background: #FFEBEE; color: #B71C1C; }
+  .sync-offline{ background: #F5F5F5; color: #757575; }
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .sync-ok .sync-dot     { background: #4CAF50; animation: pulse 2s infinite; }
+  .sync-saving .sync-dot { background: #FF9800; animation: spin 1s linear infinite; border-radius:0; }
+  .sync-error .sync-dot  { background: #F44336; }
+  .sync-offline .sync-dot{ background: #9E9E9E; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  @keyframes spin  { to{transform:rotate(360deg)} }
+
+  /* ---- USER BADGE ---- */
+  .user-badge {
+    background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.3);
+    border-radius: 20px; padding: 4px 12px; font-size: 12px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .user-badge .avatar {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: #4FC3F7; color: #fff; font-weight: 700; font-size: 11px;
+    display: flex; align-items: center; justify-content: center;
+  }
+</style>
+</head>
+<body>
+<!-- ================================================================ -->
+<!-- SETUP / LOGIN SCREEN                                              -->
+<!-- ================================================================ -->
+<div id="setupScreen">
+  <div class="setup-card">
+    <div style="font-size:48px;margin-bottom:12px">📊</div>
+    <h2>KSM KPI Calculator</h2>
+    <div class="sub">Группа компаний KSM — система контрактов ожиданий</div>
+
+    <!-- Step 1: Firebase not configured -->
+    <div id="setupStep1">
+      <div class="setup-config">
+        <div style="font-weight:700;color:var(--dark-blue);margin-bottom:8px">🔧 Первый запуск — настройка базы данных</div>
+        <div class="config-steps">
+          <b>1.</b> Откройте <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a><br>
+          <b>2.</b> Создайте проект → «KSM-KPI»<br>
+          <b>3.</b> Firestore Database → Создать → режим <b>Тест</b> (30 дней)<br>
+          <b>4.</b> ⚙️ Настройки проекта → Веб-приложение → скопируйте конфигурацию<br>
+          <b>5.</b> Вставьте значения ниже и нажмите «Сохранить»
+        </div>
+      </div>
+
+      <div class="setup-section">
+        <label>Project ID (из firebaseConfig)</label>
+        <input type="text" id="cfg-projectId" placeholder="ksm-kpi-xxxxx">
+      </div>
+      <div class="setup-section">
+        <label>API Key</label>
+        <input type="text" id="cfg-apiKey" placeholder="AIzaSy...">
+      </div>
+      <div class="setup-section">
+        <label>App ID</label>
+        <input type="text" id="cfg-appId" placeholder="1:123456:web:abc...">
+      </div>
+
+      <div class="setup-divider">или</div>
+
+      <div class="setup-section">
+        <label>📋 Вставьте весь объект firebaseConfig (JSON)</label>
+        <textarea id="cfg-json" rows="5" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font-family:monospace;font-size:11px;resize:vertical"
+          placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'></textarea>
+      </div>
+
+      <button class="btn btn-primary" style="width:100%;padding:12px;font-size:14px" onclick="saveFirebaseConfig()">
+        🚀 Подключить базу данных
+      </button>
+      <div style="margin-top:12px">
+        <button class="btn btn-outline btn-sm" onclick="useDemoMode()" style="width:100%">
+          👁️ Демо-режим (без Firebase, только локально)
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 2: Login — choose who you are -->
+    <div id="setupStep2" style="display:none">
+      <div class="setup-section">
+        <label>👤 Войдите как руководитель</label>
+        <select id="loginSelect" style="font-size:14px;padding:10px">
+          <option value="">— Выберите себя из списка —</option>
+        </select>
+      </div>
+      <div class="setup-section" id="pinSection" style="display:none">
+        <label>🔑 PIN-код (4 цифры)</label>
+        <input type="password" id="pinInput" maxlength="4" placeholder="••••"
+          style="letter-spacing:8px;font-size:20px;text-align:center"
+          oninput="if(this.value.length===4) tryLogin()">
+        <div id="pinError" style="color:#c00;font-size:11px;margin-top:4px;display:none">
+          Неверный PIN. Спросите администратора.
+        </div>
+      </div>
+      <button class="btn btn-primary" style="width:100%;padding:12px;font-size:14px;margin-top:8px" onclick="tryLogin()">
+        Войти →
+      </button>
+      <div style="margin-top:12px;font-size:11px;color:#aaa">
+        Данные хранятся в общей базе Firebase. Все изменения видны всем.
+      </div>
+    </div>
+
+    <div id="setupStatus" style="margin-top:12px;font-size:12px;color:#888"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+
+<!-- ===== HEADER ===== -->
+<header>
+  <div class="logo">📊</div>
+  <div>
+    <h1>KSM KPI Calculator</h1>
+    <div class="subtitle">Система контрактов ожиданий — группа компаний KSM</div>
+  </div>
+  <div class="spacer"></div>
+  <div id="syncBar" class="sync-offline"><span class="sync-dot"></span><span id="syncText">Локально</span></div>
+  <div class="period-badge" id="headerPeriod">Q1 2025 · Неделя 1</div>
+  <div class="user-badge" id="userBadge" style="display:none">
+    <div class="avatar" id="userAvatar">?</div>
+    <span id="userName">—</span>
+    <button onclick="logout()" style="background:none;border:none;color:rgba(255,255,255,.7);cursor:pointer;font-size:14px;padding:0 0 0 4px" title="Выйти">✕</button>
+  </div>
+</header>
+
+<!-- ===== TABS ===== -->
+<nav class="tabs">
+  <button class="active" onclick="showTab('dashboard')">🏠 Дашборд</button>
+  <button onclick="showTab('input')">📝 Ввод данных</button>
+  <button onclick="showTab('weekly')">📈 Расчёт недели</button>
+  <button onclick="showTab('quarterly')">📅 Квартальный отчёт</button>
+  <button onclick="showTab('history')">🗄️ История</button>
+  <button onclick="showTab('settings')">⚙️ Настройки</button>
+  <button onclick="showTab('guide')">📖 Инструкция</button>
+</nav>
+
+<!-- ===== MAIN ===== -->
+<main>
+
+<!-- ================================================================ -->
+<!-- TAB: ДАШБОРД                                                       -->
+<!-- ================================================================ -->
+<div id="tab-dashboard" class="tab-panel active">
+  <div class="week-bar">
+    <label>Период:</label>
+    <select id="db-year" onchange="refreshAll()"><option>2025</option><option>2026</option></select>
+    <select id="db-quarter" onchange="refreshAll()">
+      <option value="Q1">Q1</option><option value="Q2">Q2</option>
+      <option value="Q3">Q3</option><option value="Q4">Q4</option>
+    </select>
+    <label>Неделя:</label>
+    <select id="db-week" onchange="refreshAll()"></select>
+    <button class="btn btn-primary btn-sm" onclick="refreshAll()">🔄 Обновить</button>
+    <span style="margin-left:auto;font-size:11px;color:#888">Обновлено: <span id="lastUpdate"></span></span>
+  </div>
+
+  <div class="card">
+    <div class="card-header">🚦 Светофор KPI — текущая неделя</div>
+    <div class="card-body">
+      <div class="dash-grid" id="trafficLights"></div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <div class="card">
+      <div class="card-header">🏆 Топ-3 лучших результатов</div>
+      <div class="card-body" id="top3Best"></div>
+    </div>
+    <div class="card">
+      <div class="card-header">⚠️ Топ-3 требуют внимания</div>
+      <div class="card-body" id="top3Worst"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">🏭 Командные KPI компании — текущая неделя</div>
+    <div class="card-body" id="teamKpiDash"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">📉 Квартальная динамика</div>
+    <div class="card-body" id="quarterDynamic"></div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB: ВВОД ДАННЫХ                                                   -->
+<!-- ================================================================ -->
+<div id="tab-input" class="tab-panel">
+  <div class="week-bar">
+    <label>Год:</label>
+    <select id="in-year" onchange="refreshAll()"><option>2025</option><option>2026</option></select>
+    <label>Квартал:</label>
+    <select id="in-quarter" onchange="refreshAll()">
+      <option>Q1</option><option>Q2</option><option>Q3</option><option>Q4</option>
+    </select>
+    <label>Неделя (1-13):</label>
+    <select id="in-week" onchange="refreshAll()"></select>
+    <button class="btn btn-success btn-sm" onclick="saveData()">💾 Сохранить неделю в историю</button>
+    <button class="btn btn-outline btn-sm" onclick="exportJSON()">⬇️ Экспорт JSON</button>
+  </div>
+
+  <div class="note">
+    💡 Заполняйте <strong>жёлтые поля</strong>. Синие значения рассчитываются автоматически.
+    Safety Gate применяется к итоговому KPI каждого руководителя.
+  </div>
+
+  <div id="inputSections"></div>
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB: РАСЧЁТ НЕДЕЛИ                                                 -->
+<!-- ================================================================ -->
+<div id="tab-weekly" class="tab-panel">
+  <div class="note">
+    Этот лист показывает подробный расчёт KPI за выбранную неделю.
+    Данные берутся из вкладки «Ввод данных».
+  </div>
+
+  <div class="formula-box">
+    <strong>Формула нормировки:</strong><br>
+    <b>MAX-метрики</b> (больше = лучше): ≤ Порог → <code>0%</code> | Порог..План → линейно <code>0–100%</code> | План..Стретч → линейно <code>100–120%</code> | &gt; Стретч → <code>120%</code><br>
+    <b>MIN-метрики</b> (меньше = лучше): аналогично, но порог и стретч меняются местами<br>
+    <b>Итоговый KPI</b> = (Личные × 70% + Командные × 30%) × Safety Gate
+  </div>
+
+  <div id="weeklyCalc"></div>
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB: КВАРТАЛЬНЫЙ ОТЧЁТ                                            -->
+<!-- ================================================================ -->
+<div id="tab-quarterly" class="tab-panel">
+  <div class="note">Сводный отчёт за квартал. Данные из всех сохранённых недель.</div>
+
+  <div class="card">
+    <div class="card-header">1. Сводная таблица KPI по руководителям</div>
+    <div class="card-body" style="overflow-x:auto">
+      <table id="quarterSummary">
+        <thead></thead><tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">2. Аналитика командных KPI</div>
+    <div class="card-body" style="overflow-x:auto">
+      <table id="teamKpiQuarter">
+        <thead></thead><tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">3. Журнал Safety Gate за квартал</div>
+    <div class="card-body" style="overflow-x:auto">
+      <table id="sgLog">
+        <thead></thead><tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB: ИСТОРИЯ                                                        -->
+<!-- ================================================================ -->
+<div id="tab-history" class="tab-panel">
+  <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;">
+    <button class="btn btn-outline btn-sm" onclick="clearHistory()">🗑️ Очистить историю</button>
+    <button class="btn btn-outline btn-sm" onclick="exportJSON()">⬇️ Экспорт JSON</button>
+    <button class="btn btn-outline btn-sm" onclick="importJSON()">⬆️ Импорт JSON</button>
+    <span style="font-size:11px;color:#888">Записей: <span id="historyCount">0</span></span>
+  </div>
+  <div class="card">
+    <div class="card-header">🗄️ Архив KPI по неделям</div>
+    <div class="card-body history-wrap">
+      <table id="historyTable">
+        <thead>
+          <tr>
+            <th>Год</th><th>Квартал</th><th>Нед.</th><th class="left">ФИО</th>
+            <th>Личный</th><th>Командный</th><th>Safety Gate</th><th>Итого KPI</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB: НАСТРОЙКИ                                                      -->
+<!-- ================================================================ -->
+<div id="tab-settings" class="tab-panel">
+  <div class="settings-grid">
+
+    <div class="card">
+      <div class="card-header">1.2 Пороги командных KPI</div>
+      <div class="card-body">
+        <table class="settings-table">
+          <thead>
+            <tr><th class="left">Метрика</th><th>Напр.</th><th>Порог</th><th>План</th><th>Стретч</th></tr>
+          </thead>
+          <tbody id="thresholdTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">1.3 Safety Gate коэффициенты</div>
+      <div class="card-body">
+        <table>
+          <thead><tr><th>Уровень</th><th>Коэффициент</th><th class="left">Описание</th></tr></thead>
+          <tbody>
+            <tr><td class="sg-badge sg-A">A</td><td>1.00</td><td class="left">Нарушений нет</td></tr>
+            <tr><td class="sg-badge sg-B">B</td><td>0.75</td><td class="left">Опасные нарушения</td></tr>
+            <tr><td class="sg-badge sg-C">C</td><td>0.50</td><td class="left">Тяжёлые / повторный B</td></tr>
+          </tbody>
+        </table>
+        <div class="note" style="margin-top:12px">
+          ⚠️ Если в квартале было ≥2 событий уровня B — все последующие B автоматически считаются уровнем C (коэфф. 0.50)
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">1.4 Веса KPI</div>
+      <div class="card-body">
+        <table>
+          <thead><tr><th class="left">Параметр</th><th>Значение</th></tr></thead>
+          <tbody>
+            <tr><td class="left">Вес личных KPI</td><td>70%</td></tr>
+            <tr><td class="left">Вес командных KPI</td><td>30%</td></tr>
+            <tr><td class="left">Кол-во командных KPI</td><td>4 × 25%</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">1.1 Список руководителей</div>
+      <div class="card-body">
+        <table>
+          <thead><tr><th>ID</th><th class="left">ФИО</th><th class="left">Должность</th><th>Активен</th></tr></thead>
+          <tbody id="managerList"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB: ИНСТРУКЦИЯ                                                     -->
+<!-- ================================================================ -->
+<div id="tab-guide" class="tab-panel">
+  <div class="card">
+    <div class="card-header">📖 Руководство пользователя — KSM KPI Calculator v1</div>
+    <div class="card-body">
+      <div id="guideContent"></div>
+    </div>
+  </div>
+</div>
+
+</main>
+</div>
+
+<input type="file" id="importFile" accept=".json" style="display:none" onchange="handleImport(event)">
+
+<script>
+// ================================================================
+// DATA
+// ================================================================
+
+const MANAGERS = [
+  {id:1,  name:'Мун Дмитрий Анатольевич',   role:'Операционный директор (COO)',    active:true},
+  {id:2,  name:'Мун Ольга Алексеевна',        role:'Финансовый директор (CFO)',      active:true},
+  {id:3,  name:'Ким Андрей Алексеевич',       role:'Коммерческий директор',         active:true},
+  {id:4,  name:'Ким Владислав Семёнович',      role:'Главный инженер',               active:true},
+  {id:5,  name:'Ким Александр Леонидович',    role:'Руководитель ОУП',              active:true},
+  {id:6,  name:'Михеев Максим',               role:'Руководитель ПКБ',              active:true},
+  {id:7,  name:'Мельников Сергей Викторович', role:'Начальник цеха (котельные)',    active:true},
+  {id:8,  name:'Немирович Александр',         role:'Начальник цеха (котлы)',        active:true},
+  {id:9,  name:'Гудников Василий Ильич',      role:'Руководитель снабжения (ОМТС)', active:true},
+  {id:10, name:'Малгельдина Жанар',           role:'Руководитель ОТиТБ',           active:true},
+  {id:11, name:'Олех Валентин',               role:'Начальник сервиса и наладки',  active:true},
+  {id:12, name:'(вакансия)',                   role:'Руководитель ОТК',              active:false},
+];
+const ACTIVE = MANAGERS.filter(m => m.active);
+
+const PERSONAL_KPI = {
+  'COO': [
+    {name:'Стабильность замороженного плана', num:'Изменения в зоне заморозки', den:'Позиции плана',   dir:'MIN', thr:0.15, plan:0.05, str:0.00},
+    {name:'Простои по внутренним причинам',   num:'Н-ч простоев (абс.)',        den:null,              dir:'MIN', thr:100,  plan:40,   str:0,   abs:true},
+    {name:'НЗП (коридор)',                     num:'Отклонение от коридора',     den:'Коридор НЗП',    dir:'MIN', thr:0.20, plan:0.10, str:0.00},
+    {name:'Себестоимость план-факт',           num:'|Факт − план|',             den:'План с/с',        dir:'MIN', thr:0.10, plan:0.05, str:0.00},
+    {name:'Корректность классификации потерь', num:'Корректно класс. н-ч',      den:'Все н-ч потерь',  dir:'MAX', thr:0.70, plan:0.90, str:1.00},
+  ],
+  'CFO': [
+    {name:'Актуальность себестоимости',        num:'Проекты с акт. с/с',        den:'Все акт. проекты',dir:'MAX', thr:0.70, plan:1.00, str:1.20},
+    {name:'Дисциплина бюджетного процесса',    num:'Согласов. отклонения',      den:'Все отклонения',  dir:'MAX', thr:0.70, plan:1.00, str:1.20},
+    {name:'Точность прогноза ДДС',             num:'|Факт−прогноз|',            den:'|Прогноз ДДС|',   dir:'MIN', thr:0.20, plan:0.10, str:0.00},
+    {name:'Управляемость дебиторки',           num:'Дебиторка с планом',        den:'Просроч. деб.',   dir:'MAX', thr:0.70, plan:1.00, str:1.20},
+    {name:'Прогресс автоматизации',            num:'Закрытые этапы',            den:'Все этапы',       dir:'MAX', thr:0.50, plan:1.00, str:1.20},
+  ],
+  'Коммерческий директор': [
+    {name:'Развитие команды продаж',           num:'Продавцы с мин.планом',     den:'План продавцов',  dir:'MAX', thr:0.70, plan:1.00, str:1.10},
+    {name:'Выполнение плана выручки',          num:'Факт выручки',              den:'План выручки',    dir:'MAX', thr:0.80, plan:1.00, str:1.10},
+    {name:'Качество сделок (маржа)',           num:'Сделки в коридоре маржи',   den:'Все сделки',      dir:'MAX', thr:0.70, plan:0.90, str:1.00},
+    {name:'Дисциплина коммерч. обяз.',         num:'Договоры без нест. условий',den:'Все договоры',    dir:'MAX', thr:0.80, plan:0.95, str:1.00},
+    {name:'Вклад маркетинга в воронку',        num:'Лиды от маркетинга',        den:'Все лиды',        dir:'MAX', thr:0.20, plan:0.40, str:0.60},
+  ],
+  'Главный инженер': [
+    {name:'Стабильность тех. процессов',       num:'Операции без отклонений',   den:'Все операции',    dir:'MAX', thr:0.80, plan:0.95, str:1.00},
+    {name:'Потери качества (инж.)',             num:'Н-ч переделок (инж.)',      den:'Все н-ч переделок',dir:'MIN',thr:0.20, plan:0.10, str:0.05},
+    {name:'Kaizen / повышение КПД',            num:'Подтв. эффект (н-ч)',       den:'План улучшений',  dir:'MAX', thr:0.50, plan:1.00, str:1.20},
+    {name:'Тех. готовность к запуску',         num:'Запуски с полным КД',       den:'Все запуски',     dir:'MAX', thr:0.70, plan:0.95, str:1.00},
+    {name:'Актуальность норм',                 num:'Операции с акт. нормами',   den:'Все операции',    dir:'MAX', thr:0.80, plan:0.95, str:1.00},
+  ],
+  'Руководитель ОУП': [
+    {name:'Коммуникация с заказчиком',         num:'Ответы в SLA + акты',       den:'2 (avg)',          dir:'MAX', thr:0.70, plan:0.90, str:1.00},
+    {name:'Управление сроками проекта',        num:'Этапы в срок',              den:'Все этапы',       dir:'MAX', thr:0.70, plan:0.90, str:1.00},
+    {name:'Дисциплина фиксации Битрикс24',     num:'Зафиксир. договорённости',  den:'Все договорённости',dir:'MAX',thr:0.80,plan:0.95,str:1.00},
+    {name:'Управляемость (эскалации)',         num:'Эскалации закрытые в срок', den:'Все эскалации',   dir:'MAX', thr:0.70, plan:0.90, str:1.00},
+    {name:'SLA эксплуатационных обращений',   num:'Обращения в SLA',           den:'Все обращения',   dir:'MAX', thr:0.80, plan:0.95, str:1.00},
+  ],
+  'Руководитель ПКБ': [
+    {name:'Своевременность выпуска КД',        num:'КД в срок',                 den:'Все КД',          dir:'MAX', thr:0.80, plan:0.95, str:1.00, w:0.25},
+    {name:'Качество КД (без возвратов)',        num:'КД без возвратов',          den:'Все КД',          dir:'MAX', thr:0.80, plan:0.95, str:1.00, w:0.25},
+    {name:'Потери производства по КД (н-ч)',   num:'Н-ч потерь (абс.)',         den:null,              dir:'MIN', thr:80,   plan:30,   str:0,    abs:true, w:0.25},
+    {name:'Развитие б-ки типовых решений',     num:'Выполн. этапы унификации',  den:'План унификации', dir:'MAX', thr:0.50, plan:1.00, str:1.20, w:0.25},
+  ],
+  'Начальник цеха (котельные)': [
+    {name:'Выполнение замороженного плана',    num:'Выполненные позиции',       den:'Позиции плана',   dir:'MAX', thr:0.80, plan:0.95, str:1.00},
+    {name:'Производительность труда',          num:'Факт н-ч',                  den:'План н-ч',        dir:'MAX', thr:0.90, plan:1.00, str:1.10},
+    {name:'Потери качества',                   num:'Н-ч переделок и брака',     den:'Все н-ч',         dir:'MIN', thr:0.10, plan:0.06, str:0.03},
+    {name:'Простои по внутренним причинам',    num:'Н-ч простоев (абс.)',       den:null,              dir:'MIN', thr:100,  plan:40,   str:0,    abs:true},
+    {name:'Технологическая дисциплина',        num:'Операции по инструкциям',   den:'Все операции',    dir:'MAX', thr:0.80, plan:0.95, str:1.00},
+  ],
+  'Начальник цеха (котлы)': [
+    {name:'Выполнение замороженного плана',    num:'Выполненные позиции',       den:'Позиции плана',   dir:'MAX', thr:0.80, plan:0.95, str:1.00},
+    {name:'Производительность труда',          num:'Факт н-ч',                  den:'План н-ч',        dir:'MAX', thr:0.90, plan:1.00, str:1.10},
+    {name:'Потери качества',                   num:'Н-ч переделок и брака',     den:'Все н-ч',         dir:'MIN', thr:0.10, plan:0.06, str:0.03},
+    {name:'Простои по внутренним причинам',    num:'Н-ч простоев (абс.)',       den:null,              dir:'MIN', thr:100,  plan:40,   str:0,    abs:true},
+    {name:'Технологическая дисциплина',        num:'Операции по инструкциям',   den:'Все операции',    dir:'MAX', thr:0.80, plan:0.95, str:1.00},
+  ],
+  'Руководитель снабжения (ОМТС)': [
+    {name:'Поставки в срок',                   num:'Поставки в срок',           den:'Все поставки',    dir:'MAX', thr:0.80, plan:0.95, str:1.00},
+    {name:'Потери по причине снабжения (н-ч)', num:'Н-ч потерь (абс.)',         den:null,              dir:'MIN', thr:80,   plan:30,   str:0,    abs:true},
+    {name:'Качество входящих материалов',      num:'Поставки без замечаний',    den:'Все поставки',    dir:'MAX', thr:0.80, plan:0.95, str:1.00},
+    {name:'Оборачиваемость запасов (дни)',     num:'Средний запас',             den:'Среднесут. потр.',dir:'MIN', thr:45,   plan:30,   str:15},
+    {name:'Дисциплина закупок',               num:'Закупки по утв. заявкам',   den:'Все закупки',     dir:'MAX', thr:0.80, plan:0.95, str:1.00},
+  ],
+  'Руководитель ОТиТБ': [
+    {name:'Квота по выявленным рискам',        num:'Выполнено (1=да, 0=нет)',   den:null,              dir:'MAX', thr:0,    plan:1,    str:1,    abs:true, w:0.25},
+    {name:'Риски, устранённые в срок',         num:'Устранённые риски',         den:'Все выявл. риски',dir:'MAX', thr:0.50, plan:0.90, str:1.00, w:0.25},
+    {name:'Инциденты с устранённой КП',        num:'Инц. B+C с устран. КП',    den:'Все инц. B+C',    dir:'MAX', thr:0.50, plan:0.80, str:1.00, w:0.25},
+    {name:'Охват обучением',                   num:'Обученный персонал',        den:'Весь персонал',   dir:'MAX', thr:0.70, plan:0.95, str:1.00, w:0.25},
+  ],
+  'Начальник сервиса и наладки': [
+    {name:'Качество ПНР',                      num:'Объекты без рекламаций 30 д.',den:'Все объекты',   dir:'MAX', thr:0.80, plan:0.95, str:1.00},
+    {name:'Соблюдение сроков ПНР',            num:'ПНР в срок',                den:'Все ПНР',         dir:'MAX', thr:0.80, plan:0.95, str:1.00},
+    {name:'SLA сервисных обращений',           num:'Обращения в SLA',           den:'Все обращения',   dir:'MAX', thr:0.80, plan:0.95, str:1.00},
+    {name:'Удовлетворённость заказчика',       num:'Средняя оценка',            den:'5 (макс.)',       dir:'MAX', thr:0.70, plan:0.90, str:1.00},
+    {name:'Выручка от сервисных контрактов',   num:'Факт выручки',              den:'План выручки',    dir:'MAX', thr:0.80, plan:1.00, str:1.10},
+  ],
+};
+
+const TEAM_KPIS = [
+  {name:'Выполнение замороженного плана', dir:'MAX', thr:0.80, plan:0.95, str:1.00},
+  {name:'Производительность труда',       dir:'MAX', thr:0.90, plan:1.00, str:1.10},
+  {name:'Потери качества',                dir:'MIN', thr:0.10, plan:0.06, str:0.03},
+  {name:'Потери по материалам',           dir:'MIN', thr:0.05, plan:0.02, str:0.00},
+];
+
+function getRoleKey(role) {
+  if (role.includes('COO')) return 'COO';
+  if (role.includes('CFO')) return 'CFO';
+  if (role.includes('омм')) return 'Коммерческий директор';
+  if (role.includes('нженер')) return 'Главный инженер';
+  if (role.includes('ОУП')) return 'Руководитель ОУП';
+  if (role.includes('ПКБ')) return 'Руководитель ПКБ';
+  if (role.includes('отельны')) return 'Начальник цеха (котельные)';
+  if (role.includes('отлы')) return 'Начальник цеха (котлы)';
+  if (role.includes('ОМТС')) return 'Руководитель снабжения (ОМТС)';
+  if (role.includes('ОТиТБ')) return 'Руководитель ОТиТБ';
+  if (role.includes('ервис')) return 'Начальник сервиса и наладки';
+  return null;
+}
+
+// ================================================================
+// FIREBASE CONFIG & AUTH
+// ================================================================
+
+let DB = null;          // Firestore instance or null (demo mode)
+let CURRENT_USER = null; // { id, name, role, isAdmin }
+let DEMO_MODE = false;
+
+// PIN-codes stored in Firestore (collection: settings/pins)
+// Format: { mgrId: "1234", ... }
+// Default PIN for new users: "1111"
+// Admin PIN (mgr id 0): manages all data
+
+const FIREBASE_CONFIG_KEY = 'ksm_firebase_config';
+
+function getStoredConfig() {
+  try { return JSON.parse(localStorage.getItem(FIREBASE_CONFIG_KEY)); }
+  catch(e) { return null; }
+}
+
+function saveFirebaseConfig() {
+  const status = document.getElementById('setupStatus');
+
+  // Try JSON paste first
+  const jsonRaw = document.getElementById('cfg-json').value.trim();
+  let config = null;
+
+  if (jsonRaw) {
+    try { config = JSON.parse(jsonRaw); }
+    catch(e) { status.textContent = '❌ Невалидный JSON: ' + e.message; return; }
+  } else {
+    const projectId = document.getElementById('cfg-projectId').value.trim();
+    const apiKey    = document.getElementById('cfg-apiKey').value.trim();
+    const appId     = document.getElementById('cfg-appId').value.trim();
+    if (!projectId || !apiKey || !appId) {
+      status.textContent = '❌ Заполните Project ID, API Key и App ID'; return;
+    }
+    config = {
+      apiKey,
+      authDomain: `${projectId}.firebaseapp.com`,
+      projectId,
+      storageBucket: `${projectId}.appspot.com`,
+      appId
+    };
+  }
+
+  status.textContent = '⏳ Подключение к Firebase...';
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(config);
+    DB = firebase.firestore();
+    // Test connection
+    DB.collection('_ping').doc('test').set({ ts: Date.now() })
+      .then(() => {
+        localStorage.setItem(FIREBASE_CONFIG_KEY, JSON.stringify(config));
+        status.textContent = '✅ Подключено! Инициализация пользователей...';
+        initDefaultPins().then(() => showLoginStep());
+      })
+      .catch(err => {
+        status.textContent = '❌ Ошибка: ' + err.message;
+        DB = null;
+      });
+  } catch(e) {
+    status.textContent = '❌ ' + e.message;
+  }
+}
+
+async function initDefaultPins() {
+  // Create default pins doc if not exists
+  const ref = DB.collection('settings').doc('pins');
+  const snap = await ref.get();
+  if (!snap.exists) {
+    const pins = {};
+    ACTIVE.forEach(m => { pins[m.id] = '1111'; });
+    pins['admin'] = '0000';
+    await ref.set(pins);
+  }
+}
+
+function useDemoMode() {
+  DEMO_MODE = true;
+  DB = null;
+  showLoginStep();
+}
+
+function showLoginStep() {
+  document.getElementById('setupStep1').style.display = 'none';
+  document.getElementById('setupStep2').style.display = 'block';
+
+  const sel = document.getElementById('loginSelect');
+  sel.innerHTML = '<option value="">— Выберите себя из списка —</option>';
+  ACTIVE.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m.id;
+    opt.textContent = `${m.name} — ${m.role}`;
+    sel.appendChild(opt);
+  });
+  // Admin option
+  const adminOpt = document.createElement('option');
+  adminOpt.value = 'admin';
+  adminOpt.textContent = '🔐 Администратор (полный доступ)';
+  sel.appendChild(adminOpt);
+
+  sel.onchange = () => {
+    const pinSec = document.getElementById('pinSection');
+    pinSec.style.display = sel.value ? 'block' : 'none';
+    document.getElementById('pinInput').value = '';
+    document.getElementById('pinError').style.display = 'none';
+    if (DEMO_MODE) {
+      pinSec.style.display = 'none'; // no PIN in demo
+    }
+  };
+}
+
+async function tryLogin() {
+  const sel = document.getElementById('loginSelect');
+  const mgrIdRaw = sel.value;
+  if (!mgrIdRaw) { alert('Выберите руководителя'); return; }
+
+  if (DEMO_MODE) {
+    // No PIN in demo
+    const mgr = mgrIdRaw === 'admin'
+      ? { id: 0, name: 'Администратор', role: 'Полный доступ', isAdmin: true }
+      : MANAGERS.find(m => m.id === parseInt(mgrIdRaw));
+    finishLogin(mgr, true);
+    return;
+  }
+
+  const pin = document.getElementById('pinInput').value;
+  if (pin.length !== 4) { alert('Введите 4-значный PIN'); return; }
+
+  try {
+    const snap = await DB.collection('settings').doc('pins').get();
+    const pins = snap.exists ? snap.data() : {};
+    const correctPin = pins[mgrIdRaw] || '1111';
+    if (pin !== correctPin) {
+      document.getElementById('pinError').style.display = 'block';
+      return;
+    }
+    document.getElementById('pinError').style.display = 'none';
+    const mgr = mgrIdRaw === 'admin'
+      ? { id: 0, name: 'Администратор', role: 'Полный доступ', isAdmin: true }
+      : MANAGERS.find(m => m.id === parseInt(mgrIdRaw));
+    finishLogin(mgr, false);
+  } catch(e) {
+    alert('Ошибка входа: ' + e.message);
+  }
+}
+
+function finishLogin(mgr, demo) {
+  CURRENT_USER = { ...mgr, isAdmin: mgr.isAdmin || mgr.id === 0 };
+  DEMO_MODE = demo;
+
+  // Store session
+  sessionStorage.setItem('ksm_user', JSON.stringify(CURRENT_USER));
+
+  // Update header
+  const ub = document.getElementById('userBadge');
+  ub.style.display = 'flex';
+  document.getElementById('userName').textContent = mgr.name.split(' ')[0];
+  document.getElementById('userAvatar').textContent = mgr.name[0];
+
+  // Hide setup, show app
+  document.getElementById('setupScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('app').style.flexDirection = 'column';
+  document.getElementById('app').style.minHeight = '100vh';
+
+  // Init
+  loadState().then(() => {
+    populateWeekSelects();
+    syncPeriod();
+    const now = new Date();
+    document.getElementById('lastUpdate').textContent =
+      now.toLocaleDateString('ru-RU') + ' ' + now.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+    renderSettings();
+    renderGuide();
+    renderDashboard();
+    setSyncStatus(DEMO_MODE ? 'offline' : 'ok');
+    if (!DEMO_MODE) subscribeToChanges();
+  });
+}
+
+function logout() {
+  sessionStorage.removeItem('ksm_user');
+  location.reload();
+}
+
+// ================================================================
+// SYNC STATUS
+// ================================================================
+function setSyncStatus(type, text) {
+  const bar = document.getElementById('syncBar');
+  const txt = document.getElementById('syncText');
+  bar.className = `sync-${type}`;
+  txt.textContent = text || { ok:'Синхронизировано', saving:'Сохранение...', error:'Ошибка связи', offline:'Демо-режим' }[type];
+}
+
+// ================================================================
+// STATE — Firebase Firestore or localStorage (demo)
+// ================================================================
+
+let STATE = {};
+let _saveTimer = null;
+
+function stateKey(year, quarter, week, mgrId) {
+  return `kpi_${year}_${quarter}_W${week}_m${mgrId}`;
+}
+
+async function loadState() {
+  if (DEMO_MODE || !DB) {
+    try {
+      const raw = localStorage.getItem('ksm_kpi_state');
+      STATE = raw ? JSON.parse(raw) : {};
+    } catch(e) { STATE = {}; }
+    return;
+  }
+  try {
+    const snap = await DB.collection('kpiData').get();
+    STATE = {};
+    snap.forEach(doc => { STATE[doc.id] = doc.data(); });
+  } catch(e) {
+    console.warn('Firestore loadState error', e);
+    // Fallback to localStorage
+    const raw = localStorage.getItem('ksm_kpi_state');
+    STATE = raw ? JSON.parse(raw) : {};
+  }
+}
+
+function saveState() {
+  // Always save to localStorage as backup
+  localStorage.setItem('ksm_kpi_state', JSON.stringify(STATE));
+
+  if (DEMO_MODE || !DB) return;
+
+  // Debounced Firestore save
+  setSyncStatus('saving');
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => {
+    const batch = DB.batch();
+    Object.entries(STATE).forEach(([key, val]) => {
+      const ref = DB.collection('kpiData').doc(key);
+      batch.set(ref, val);
+    });
+    batch.commit()
+      .then(() => setSyncStatus('ok'))
+      .catch(e => { console.error(e); setSyncStatus('error', 'Ошибка: ' + e.code); });
+  }, 800);
+}
+
+// Real-time listener — updates STATE when others change data
+let _unsubscribe = null;
+function subscribeToChanges() {
+  if (!DB) return;
+  _unsubscribe = DB.collection('kpiData').onSnapshot(snap => {
+    snap.docChanges().forEach(change => {
+      if (change.type === 'modified' || change.type === 'added') {
+        STATE[change.doc.id] = change.doc.data();
+      }
+      if (change.type === 'removed') {
+        delete STATE[change.doc.id];
+      }
+    });
+    setSyncStatus('ok', 'Синхронизировано (' + new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}) + ')');
+    // Re-render active tab silently
+    const active = document.querySelector('.tab-panel.active');
+    if (active) {
+      const id = active.id.replace('tab-','');
+      if (id === 'dashboard') renderDashboard();
+      if (id === 'quarterly') renderQuarterly();
+    }
+  }, err => setSyncStatus('error', 'Ошибка: ' + err.code));
+}
+
+function getWeekData(year, quarter, week, mgrId) {
+  const k = stateKey(year, quarter, week, mgrId);
+  if (!STATE[k]) {
+    STATE[k] = { personal: {}, team: {num:{},den:{}}, sg: 'A', repeatB: false };
+  }
+  return STATE[k];
+}
+
+// COO_MGR_ID — идентификатор COO, единственного кто вводит командные KPI
+const COO_MGR_ID = 1;
+
+// Возвращает данные командных KPI (всегда из записи COO)
+function getSharedTeamData(year, quarter, week) {
+  return getWeekData(year, quarter, week, COO_MGR_ID).team;
+}
+
+// ================================================================
+// FIREBASE SETUP ON PAGE LOAD
+// ================================================================
+function checkAndInit() {
+  // Check session
+  const session = sessionStorage.getItem('ksm_user');
+  if (session) {
+    try {
+      const user = JSON.parse(session);
+      // Try to reconnect Firebase
+      const cfg = getStoredConfig();
+      if (cfg && !DEMO_MODE) {
+        try {
+          if (!firebase.apps.length) firebase.initializeApp(cfg);
+          DB = firebase.firestore();
+        } catch(e) {}
+      } else {
+        DEMO_MODE = true;
+      }
+      finishLogin(user, !cfg);
+      return;
+    } catch(e) {}
+  }
+
+  // Check stored Firebase config
+  const cfg = getStoredConfig();
+  if (cfg) {
+    try {
+      if (!firebase.apps.length) firebase.initializeApp(cfg);
+      DB = firebase.firestore();
+      document.getElementById('setupStatus').textContent = '✅ Firebase подключён. Войдите.';
+      showLoginStep();
+      return;
+    } catch(e) {
+      console.warn('Stored config invalid', e);
+    }
+  }
+
+  // Show setup screen (Step 1)
+  document.getElementById('setupScreen').style.display = 'flex';
+}
+
+// ================================================================
+// CALCULATION ENGINE
+// ================================================================
+
+function normalize(fact, thr, plan, str, dir) {
+  if (fact === null || fact === undefined || fact === '' || isNaN(fact)) return null;
+  fact = parseFloat(fact);
+  if (dir === 'MAX') {
+    if (fact <= thr) return 0;
+    if (fact <= plan) return (fact - thr) / (plan - thr);
+    if (fact <= str)  return 1 + (fact - plan) / (str - plan) * 0.2;
+    return 1.2;
+  } else { // MIN
+    if (fact >= thr) return 0;
+    if (fact >= plan) return (thr - fact) / (thr - plan);
+    if (fact >= str)  return 1 + (plan - fact) / (plan - str) * 0.2;
+    return 1.2;
+  }
+}
+
+function calcPersonalKPI(mgr, data) {
+  const rk = getRoleKey(mgr.role);
+  const kpis = PERSONAL_KPI[rk] || [];
+  const n = kpis.length;
+  let total = 0, count = 0;
+  let details = [];
+
+  kpis.forEach((kpi, i) => {
+    const w = kpi.w || (1 / n);
+    let fact = null;
+
+    if (kpi.abs) {
+      const v = data.personal[`abs_${i}`];
+      fact = (v !== undefined && v !== '') ? parseFloat(v) : null;
+    } else {
+      const num = parseFloat(data.personal[`num_${i}`]);
+      const den = parseFloat(data.personal[`den_${i}`]);
+      fact = (!isNaN(num) && !isNaN(den) && den !== 0) ? num / den : null;
+    }
+
+    const norm = (fact !== null) ? normalize(fact, kpi.thr, kpi.plan, kpi.str, kpi.dir) : null;
+    if (norm !== null) {
+      total += norm * w;
+      count++;
+    }
+    details.push({ kpi, fact, norm, w });
+  });
+
+  return { total: count > 0 ? total : null, details, n };
+}
+
+// calcTeamKPI всегда использует общие командные данные COO
+function calcTeamKPI(data, year, quarter, week) {
+  // Берём командные данные из COO (если не переданы явно)
+  const yr  = year   || getYear();
+  const q   = quarter|| getQuarter();
+  const w   = week   || getWeek();
+  const teamData = getSharedTeamData(yr, q, w);
+
+  let total = 0, count = 0;
+  let details = [];
+
+  TEAM_KPIS.forEach((kpi, i) => {
+    const num = parseFloat(teamData.num[i]);
+    const den = parseFloat(teamData.den[i]);
+    const fact = (!isNaN(num) && !isNaN(den) && den !== 0) ? num / den : null;
+    const norm = (fact !== null) ? normalize(fact, kpi.thr, kpi.plan, kpi.str, kpi.dir) : null;
+    if (norm !== null) { total += norm * 0.25; count++; }
+    details.push({ kpi, fact, norm });
+  });
+
+  return { total: count > 0 ? total : null, details };
+}
+
+function calcSG(sg, repeatB) {
+  if (sg === 'C' || (sg === 'B' && repeatB)) return 0.5;
+  if (sg === 'B') return 0.75;
+  return 1.0;
+}
+
+function calcFinalKPI(personal, team, sgCoeff) {
+  if (personal === null || team === null) return null;
+  return (personal * 0.7 + team * 0.3) * sgCoeff;
+}
+
+function kpiColor(v) {
+  if (v === null) return '';
+  if (v >= 1.00) return 'green';
+  if (v >= 0.80) return 'yellow';
+  if (v >= 0.60) return 'orange';
+  return 'red';
+}
+
+function pct(v, decimals=1) {
+  if (v === null || isNaN(v)) return '—';
+  return (v * 100).toFixed(decimals) + '%';
+}
+
+function badge(v) {
+  if (v === null) return '<span style="color:#aaa">—</span>';
+  const c = kpiColor(v);
+  return `<span class="kpi-badge kpi-${c}">${pct(v)}</span>`;
+}
+
+// ================================================================
+// GET CURRENT PERIOD
+// ================================================================
+
+function getYear()    { return parseInt(document.getElementById('db-year')?.value || document.getElementById('in-year')?.value || 2025); }
+function getQuarter() { return document.getElementById('db-quarter')?.value || document.getElementById('in-quarter')?.value || 'Q1'; }
+function getWeek()    { return parseInt(document.getElementById('db-week')?.value || document.getElementById('in-week')?.value || 1); }
+
+function syncPeriod() {
+  const yr = getYear(), qr = getQuarter(), wk = getWeek();
+  ['db-year','in-year'].forEach(id => { const el = document.getElementById(id); if(el) el.value = yr; });
+  ['db-quarter','in-quarter'].forEach(id => { const el = document.getElementById(id); if(el) el.value = qr; });
+  ['db-week','in-week'].forEach(id => { const el = document.getElementById(id); if(el) el.value = wk; });
+  const hp = document.getElementById('headerPeriod');
+  if(hp) hp.textContent = `${qr} ${yr} · Неделя ${wk}`;
+}
+
+// ================================================================
+// POPULATE WEEK SELECTS
+// ================================================================
+function populateWeekSelects() {
+  document.querySelectorAll('#db-week, #in-week').forEach(sel => {
+    sel.innerHTML = '';
+    for (let w = 1; w <= 13; w++) {
+      const opt = document.createElement('option');
+      opt.value = w; opt.textContent = w;
+      sel.appendChild(opt);
+    }
+  });
+}
+
+// ================================================================
+// RENDER INPUT TAB
+// ================================================================
+function renderInput() {
+  const year = getYear(), quarter = getQuarter(), week = getWeek();
+  const container = document.getElementById('inputSections');
+  container.innerHTML = '';
+
+  ACTIVE.forEach(mgr => {
+    const data = getWeekData(year, quarter, week, mgr.id);
+    const rk = getRoleKey(mgr.role);
+    const kpis = PERSONAL_KPI[rk] || [];
+    const n = kpis.length;
+
+    const pResult = calcPersonalKPI(mgr, data);
+    const tResult = calcTeamKPI(data);
+    const sgCoeff = calcSG(data.sg, data.repeatB);
+    const final = calcFinalKPI(pResult.total, tResult.total, sgCoeff);
+    const color = kpiColor(final);
+
+    const sec = document.createElement('div');
+    sec.className = 'mgr-section';
+    sec.id = `mgr-sec-${mgr.id}`;
+
+    // ---- Header ----
+    const hdr = document.createElement('div');
+    hdr.className = 'mgr-header';
+    hdr.innerHTML = `
+      <span class="chevron">▼</span>
+      <span style="font-size:15px">${mgr.name}</span>
+      <span style="opacity:.8;font-size:11px;font-weight:400">${mgr.role}</span>
+      <span class="mgr-kpi-live" id="live-kpi-${mgr.id}">
+        ${final !== null ? `<span class="kpi-badge kpi-${color}">${pct(final)}</span>` : '<span style="color:rgba(255,255,255,.5);font-size:13px">нет данных</span>'}
+      </span>
+    `;
+    hdr.onclick = () => toggleSection(mgr.id);
+    sec.appendChild(hdr);
+
+    // ---- Body ----
+    const body = document.createElement('div');
+    body.className = 'mgr-body';
+    body.id = `mgr-body-${mgr.id}`;
+
+    // --- БЛОК А: Личные KPI ---
+    let html = `<div class="block-label">А — Личные KPI (вес 70%)</div>`;
+    html += `<table><thead><tr>
+      <th>#</th><th class="left" style="min-width:180px">KPI</th>
+      <th>Числитель</th><th>Знаменатель</th>
+      <th>Факт %</th><th>Напр.</th><th>Порог</th><th>План</th><th>Стретч</th>
+      <th>Нормир.</th><th>Вес</th>
+    </tr></thead><tbody>`;
+
+    kpis.forEach((kpi, i) => {
+      const w = kpi.w || (1 / n);
+      let factCell, numCell, denCell;
+      if (kpi.abs) {
+        const val = data.personal[`abs_${i}`] ?? '';
+        const norm = (val !== '') ? normalize(parseFloat(val), kpi.thr, kpi.plan, kpi.str, kpi.dir) : null;
+        numCell = `<input type="number" min="0" style="width:90px" value="${val}"
+          oninput="updatePersonalAbs(${mgr.id},${i},this.value)"
+          placeholder="н-ч">`;
+        denCell = `<td style="color:#aaa;text-align:center">абс.</td>`;
+        factCell = `<td><span class="cell-formula">${val !== '' ? val : '—'}</span></td>`;
+        html += `<tr>
+          <td>${i+1}</td><td class="left">${kpi.name}</td>
+          <td>${numCell}</td>${denCell}${factCell}
+          <td><span style="color:${kpi.dir==='MIN'?'#c00':'#060'};font-weight:700">${kpi.dir}</span></td>
+          <td>${kpi.thr}</td><td>${kpi.plan}</td><td>${kpi.str}</td>
+          <td><span class="cell-formula" id="norm-p-${mgr.id}-${i}">${pct(norm)}</span></td>
+          <td>${pct(w)}</td>
+        </tr>`;
+      } else {
+        const numV = data.personal[`num_${i}`] ?? '';
+        const denV = data.personal[`den_${i}`] ?? '';
+        const num = parseFloat(numV), den = parseFloat(denV);
+        const fact = (!isNaN(num) && !isNaN(den) && den !== 0) ? num/den : null;
+        const norm = fact !== null ? normalize(fact, kpi.thr, kpi.plan, kpi.str, kpi.dir) : null;
+        html += `<tr>
+          <td>${i+1}</td><td class="left">${kpi.name}</td>
+          <td><input type="number" min="0" style="width:90px" value="${numV}"
+            oninput="updatePersonal(${mgr.id},${i},'num',this.value)" placeholder="${kpi.num}"></td>
+          <td><input type="number" min="0" style="width:90px" value="${denV}"
+            oninput="updatePersonal(${mgr.id},${i},'den',this.value)" placeholder="${kpi.den||'база'}"></td>
+          <td><span class="cell-formula" id="fact-p-${mgr.id}-${i}">${pct(fact)}</span></td>
+          <td><span style="color:${kpi.dir==='MIN'?'#c00':'#060'};font-weight:700">${kpi.dir}</span></td>
+          <td>${pct(kpi.thr)}</td><td>${pct(kpi.plan)}</td><td>${pct(kpi.str)}</td>
+          <td><span class="cell-formula" id="norm-p-${mgr.id}-${i}">${pct(norm)}</span></td>
+          <td>${pct(w)}</td>
+        </tr>`;
+      }
+    });
+
+    html += `</tbody><tfoot><tr class="sub-total-row">
+      <td colspan="9" class="left">Итого личные KPI</td>
+      <td id="total-pers-${mgr.id}" colspan="2">${pct(pResult.total)}</td>
+    </tr></tfoot></table>`;
+
+    // --- БЛОК Б: Командные KPI ---
+    const isCOO = (mgr.id === COO_MGR_ID);
+    const sharedTeam = getSharedTeamData(year, quarter, week);
+    html += `<div class="block-label">Б — Командные KPI (вес 30%)
+      ${isCOO
+        ? '<span style="background:#00B050;color:#fff;font-size:10px;padding:2px 8px;border-radius:10px;margin-left:8px">✏️ Вы вводите данные для всех</span>'
+        : '<span style="background:#2E75B6;color:#fff;font-size:10px;padding:2px 8px;border-radius:10px;margin-left:8px">👁 Данные вводит COO · только просмотр</span>'
+      }
+    </div>`;
+    html += `<table><thead><tr>
+      <th>#</th><th class="left" style="min-width:200px">KPI</th>
+      <th>Числитель</th><th>Знаменатель</th>
+      <th>Факт %</th><th>Напр.</th><th>Порог</th><th>План</th><th>Стретч</th>
+      <th>Нормир.</th><th>Вес</th>
+    </tr></thead><tbody>`;
+
+    TEAM_KPIS.forEach((tkpi, ti) => {
+      const numV = sharedTeam.num[ti] ?? '';
+      const denV = sharedTeam.den[ti] ?? '';
+      const num = parseFloat(numV), den = parseFloat(denV);
+      const fact = (!isNaN(num) && !isNaN(den) && den !== 0) ? num/den : null;
+      const norm = fact !== null ? normalize(fact, tkpi.thr, tkpi.plan, tkpi.str, tkpi.dir) : null;
+      if (isCOO) {
+        // COO — редактируемые поля
+        html += `<tr>
+          <td>${ti+1}</td><td class="left">${tkpi.name}</td>
+          <td><input type="number" min="0" style="width:90px" value="${numV}"
+            oninput="updateTeam(${mgr.id},${ti},'num',this.value)"></td>
+          <td><input type="number" min="0" style="width:90px" value="${denV}"
+            oninput="updateTeam(${mgr.id},${ti},'den',this.value)"></td>
+          <td><span class="cell-formula" id="fact-t-${mgr.id}-${ti}">${pct(fact)}</span></td>
+          <td><span style="color:${tkpi.dir==='MIN'?'#c00':'#060'};font-weight:700">${tkpi.dir}</span></td>
+          <td>${pct(tkpi.thr)}</td><td>${pct(tkpi.plan)}</td><td>${pct(tkpi.str)}</td>
+          <td><span class="cell-formula" id="norm-t-${mgr.id}-${ti}">${pct(norm)}</span></td>
+          <td>25%</td>
+        </tr>`;
+      } else {
+        // Остальные — только просмотр (readonly)
+        html += `<tr style="background:#f7fbff">
+          <td>${ti+1}</td><td class="left">${tkpi.name}</td>
+          <td><span class="cell-formula" style="color:#555">${numV !== '' ? numV : '—'}</span></td>
+          <td><span class="cell-formula" style="color:#555">${denV !== '' ? denV : '—'}</span></td>
+          <td><span class="cell-formula" id="fact-t-${mgr.id}-${ti}">${pct(fact)}</span></td>
+          <td><span style="color:${tkpi.dir==='MIN'?'#c00':'#060'};font-weight:700">${tkpi.dir}</span></td>
+          <td>${pct(tkpi.thr)}</td><td>${pct(tkpi.plan)}</td><td>${pct(tkpi.str)}</td>
+          <td><span class="cell-formula" id="norm-t-${mgr.id}-${ti}">${pct(norm)}</span></td>
+          <td>25%</td>
+        </tr>`;
+      }
+    });
+
+    html += `</tbody><tfoot><tr class="sub-total-row">
+      <td colspan="9" class="left">Итого командные KPI</td>
+      <td id="total-team-${mgr.id}" colspan="2">${pct(tResult.total)}</td>
+    </tr></tfoot></table>`;
+
+    // --- БЛОК В: Safety Gate ---
+    const sgSel = (level) => `<option value="${level}" ${data.sg===level?'selected':''}>${level}</option>`;
+    const rbSel = (val) => `<option value="${val}" ${String(data.repeatB)===(val)?'selected':''}>${val==='true'?'ДА':'НЕТ'}</option>`;
+
+    html += `<div class="block-label">В — Safety Gate</div>`;
+    html += `<div class="sg-grid">
+      <div class="sg-item">
+        <label>Уровень нарушения</label>
+        <select onchange="updateSG(${mgr.id},'sg',this.value)">
+          ${sgSel('A')}${sgSel('B')}${sgSel('C')}
+        </select>
+      </div>
+      <div class="sg-item">
+        <label>Коэффициент SG</label>
+        <div class="sg-badge sg-${data.sg}" id="sg-coeff-${mgr.id}">${sgCoeff.toFixed(2)}</div>
+      </div>
+      <div class="sg-item">
+        <label>Повторный B в квартале?</label>
+        <select onchange="updateSG(${mgr.id},'repeatB',this.value==='true')">
+          ${rbSel('false')}${rbSel('true')}
+        </select>
+      </div>
+      <div class="sg-item">
+        <label>Итоговый коэффициент</label>
+        <div class="sg-badge sg-${data.sg}" id="sg-final-${mgr.id}">${calcSG(data.sg, data.repeatB).toFixed(2)}</div>
+      </div>
+    </div>`;
+
+    // --- Итоговый расчёт ---
+    html += `<div style="margin-top:16px;padding:12px;background:#F8FBFF;border-radius:8px;border:1px solid var(--light-blue)">
+      <table style="width:auto">
+        <tr><td class="left" style="padding:4px 12px;font-weight:600">Личные KPI × 70%</td>
+            <td style="padding:4px 12px;text-align:center"><span class="cell-formula" id="pw-${mgr.id}">${pct(pResult.total !== null ? pResult.total*0.7 : null)}</span></td></tr>
+        <tr><td class="left" style="padding:4px 12px;font-weight:600">Командные KPI × 30%</td>
+            <td style="padding:4px 12px;text-align:center"><span class="cell-formula" id="tw-${mgr.id}">${pct(tResult.total !== null ? tResult.total*0.3 : null)}</span></td></tr>
+        <tr><td class="left" style="padding:4px 12px;font-weight:600">KPI до Safety Gate</td>
+            <td style="padding:4px 12px;text-align:center"><span class="cell-formula" id="bsg-${mgr.id}">${pct(pResult.total !== null && tResult.total !== null ? pResult.total*0.7+tResult.total*0.3 : null)}</span></td></tr>
+        <tr><td class="left" style="padding:4px 12px;font-weight:600">× Safety Gate</td>
+            <td style="padding:4px 12px;text-align:center"><span class="cell-formula">${calcSG(data.sg,data.repeatB).toFixed(2)}</span></td></tr>
+        <tr class="total-row"><td class="left" style="padding:6px 12px;font-size:14px">🏆 ИТОГОВЫЙ KPI НЕДЕЛИ</td>
+            <td style="padding:6px 12px;font-size:16px;font-weight:800" id="final-kpi-${mgr.id}">${badge(final)}</td></tr>
+      </table>
+    </div>`;
+
+    body.innerHTML = html;
+    sec.appendChild(body);
+    container.appendChild(sec);
+  });
+}
+
+// ================================================================
+// INPUT UPDATE HANDLERS
+// ================================================================
+
+function updatePersonal(mgrId, kpiIdx, field, value) {
+  const year=getYear(), q=getQuarter(), w=getWeek();
+  const data = getWeekData(year, q, w, mgrId);
+  data.personal[`${field}_${kpiIdx}`] = value;
+  saveState();
+  recalcMgr(mgrId);
+}
+
+function updatePersonalAbs(mgrId, kpiIdx, value) {
+  const year=getYear(), q=getQuarter(), w=getWeek();
+  const data = getWeekData(year, q, w, mgrId);
+  data.personal[`abs_${kpiIdx}`] = value;
+  saveState();
+  recalcMgr(mgrId);
+}
+
+function updateTeam(mgrId, kpiIdx, field, value) {
+  const year=getYear(), q=getQuarter(), w=getWeek();
+  // Командные KPI всегда пишутся в запись COO (общие для всех)
+  const cooData = getWeekData(year, q, w, COO_MGR_ID);
+  cooData.team[field][kpiIdx] = value;
+  saveState();
+  // Пересчитать всех активных менеджеров (командный KPI общий)
+  ACTIVE.forEach(m => recalcMgr(m.id));
+}
+
+function updateSG(mgrId, field, value) {
+  const year=getYear(), q=getQuarter(), w=getWeek();
+  const data = getWeekData(year, q, w, mgrId);
+  data[field] = value;
+  saveState();
+  recalcMgr(mgrId);
+}
+
+function recalcMgr(mgrId) {
+  const mgr = MANAGERS.find(m => m.id === mgrId);
+  if (!mgr) return;
+  const year=getYear(), q=getQuarter(), w=getWeek();
+  const data = getWeekData(year, q, w, mgrId);
+  const rk = getRoleKey(mgr.role);
+  const kpis = PERSONAL_KPI[rk] || [];
+  const n = kpis.length;
+
+  const pResult = calcPersonalKPI(mgr, data);
+  const tResult = calcTeamKPI(data);
+  const sgCoeff = calcSG(data.sg, data.repeatB);
+  const final = calcFinalKPI(pResult.total, tResult.total, sgCoeff);
+
+  // Update personal fact/norm cells
+  kpis.forEach((kpi, i) => {
+    const wt = kpi.w || (1/n);
+    let fact = null;
+    if (kpi.abs) {
+      const v = data.personal[`abs_${i}`];
+      fact = (v !== undefined && v !== '') ? parseFloat(v) : null;
+    } else {
+      const num = parseFloat(data.personal[`num_${i}`]);
+      const den = parseFloat(data.personal[`den_${i}`]);
+      fact = (!isNaN(num) && !isNaN(den) && den !== 0) ? num/den : null;
+    }
+    const norm = fact !== null ? normalize(fact, kpi.thr, kpi.plan, kpi.str, kpi.dir) : null;
+    const fc = document.getElementById(`fact-p-${mgrId}-${i}`);
+    const nc = document.getElementById(`norm-p-${mgrId}-${i}`);
+    if (fc) fc.textContent = pct(fact);
+    if (nc) nc.textContent = pct(norm);
+  });
+
+  // Update team fact/norm cells (всегда берём из общих данных COO)
+  const sharedTeam = getSharedTeamData(year, q, w);
+  TEAM_KPIS.forEach((tkpi, ti) => {
+    const num = parseFloat(sharedTeam.num[ti]);
+    const den = parseFloat(sharedTeam.den[ti]);
+    const fact = (!isNaN(num) && !isNaN(den) && den !== 0) ? num/den : null;
+    const norm = fact !== null ? normalize(fact, tkpi.thr, tkpi.plan, tkpi.str, tkpi.dir) : null;
+    const fc = document.getElementById(`fact-t-${mgrId}-${ti}`);
+    const nc = document.getElementById(`norm-t-${mgrId}-${ti}`);
+    if (fc) fc.textContent = pct(fact);
+    if (nc) nc.textContent = pct(norm);
+  });
+
+  // Totals
+  const tp = document.getElementById(`total-pers-${mgrId}`);
+  const tt = document.getElementById(`total-team-${mgrId}`);
+  const pw = document.getElementById(`pw-${mgrId}`);
+  const tw_ = document.getElementById(`tw-${mgrId}`);
+  const bsg = document.getElementById(`bsg-${mgrId}`);
+  const fk = document.getElementById(`final-kpi-${mgrId}`);
+  const lk = document.getElementById(`live-kpi-${mgrId}`);
+  const sgc = document.getElementById(`sg-coeff-${mgrId}`);
+  const sgf = document.getElementById(`sg-final-${mgrId}`);
+
+  if(tp) tp.textContent = pct(pResult.total);
+  if(tt) tt.textContent = pct(tResult.total);
+  if(pw) pw.textContent = pct(pResult.total !== null ? pResult.total*0.7 : null);
+  if(tw_) tw_.textContent = pct(tResult.total !== null ? tResult.total*0.3 : null);
+  if(bsg) bsg.textContent = pct(pResult.total !== null && tResult.total !== null ? pResult.total*0.7+tResult.total*0.3 : null);
+  if(fk) fk.innerHTML = badge(final);
+  if(lk) lk.innerHTML = final !== null ? badge(final) : '<span style="color:rgba(255,255,255,.5);font-size:12px">нет данных</span>';
+  if(sgc) sgc.textContent = sgCoeff.toFixed(2);
+  if(sgf) sgf.textContent = calcSG(data.sg, data.repeatB).toFixed(2);
+}
+
+function toggleSection(mgrId) {
+  const body = document.getElementById(`mgr-body-${mgrId}`);
+  const hdr  = body.previousElementSibling;
+  body.classList.toggle('collapsed');
+  hdr.classList.toggle('collapsed-header');
+}
+
+// ================================================================
+// RENDER DASHBOARD
+// ================================================================
+function renderDashboard() {
+  const year=getYear(), q=getQuarter(), w=getWeek();
+
+  // Traffic lights
+  const tl = document.getElementById('trafficLights');
+  tl.innerHTML = '';
+  const results = [];
+
+  ACTIVE.forEach(mgr => {
+    const data = getWeekData(year, q, w, mgr.id);
+    const pRes = calcPersonalKPI(mgr, data);
+    const tRes = calcTeamKPI(data);
+    const sgC  = calcSG(data.sg, data.repeatB);
+    const fin  = calcFinalKPI(pRes.total, tRes.total, sgC);
+    results.push({ mgr, fin, sgC });
+
+    const c = kpiColor(fin);
+    const card = document.createElement('div');
+    card.className = 'dash-card';
+    card.innerHTML = `
+      <div class="dc-name">${mgr.name.split(' ').slice(0,2).join(' ')}</div>
+      <div class="dc-role">${mgr.role}</div>
+      <div class="dc-kpi" style="color:${fin!==null?({'green':'#00B050','yellow':'#E6A817','orange':'#E67E00','red':'#D00000'}[c]||'#aaa'):'#bbb'}">
+        ${fin !== null ? pct(fin) : '—'}
+      </div>
+      <div class="dc-sg">Safety Gate: ${sgC.toFixed(2)} (${data.sg})</div>
+    `;
+    tl.appendChild(card);
+  });
+
+  // Top 3
+  const sorted = results.filter(r=>r.fin!==null).sort((a,b)=>b.fin-a.fin);
+  const top3Best  = document.getElementById('top3Best');
+  const top3Worst = document.getElementById('top3Worst');
+  top3Best.innerHTML  = sorted.slice(0,3).map((r,i)=>`
+    <div style="padding:8px;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px">
+      <span style="font-size:20px">${['🥇','🥈','🥉'][i]}</span>
+      <div><div style="font-weight:700">${r.mgr.name.split(' ').slice(0,2).join(' ')}</div>
+      <div style="font-size:11px;color:#888">${r.mgr.role}</div></div>
+      <div style="margin-left:auto">${badge(r.fin)}</div>
+    </div>`).join('') || '<div style="color:#aaa;padding:16px;text-align:center">Нет данных</div>';
+
+  top3Worst.innerHTML = sorted.slice(-3).reverse().map((r,i)=>`
+    <div style="padding:8px;border-bottom:1px solid #eee;display:flex;align-items:center;gap:10px">
+      <span style="font-size:18px">⚠️</span>
+      <div><div style="font-weight:700">${r.mgr.name.split(' ').slice(0,2).join(' ')}</div>
+      <div style="font-size:11px;color:#888">${r.mgr.role}</div></div>
+      <div style="margin-left:auto">${badge(r.fin)}</div>
+    </div>`).join('') || '<div style="color:#aaa;padding:16px;text-align:center">Нет данных</div>';
+
+  // Team KPI progress bars
+  const tkDash = document.getElementById('teamKpiDash');
+  tkDash.innerHTML = '';
+  // Aggregate team KPI from all managers (average)
+  TEAM_KPIS.forEach((tkpi, ti) => {
+    let facts = [];
+    ACTIVE.forEach(mgr => {
+      const data = getWeekData(year, q, w, mgr.id);
+      const num = parseFloat(data.team.num[ti]);
+      const den = parseFloat(data.team.den[ti]);
+      if (!isNaN(num) && !isNaN(den) && den !== 0) facts.push(num/den);
+    });
+    const avgFact = facts.length ? facts.reduce((a,b)=>a+b,0)/facts.length : null;
+    const norm = avgFact !== null ? normalize(avgFact, tkpi.thr, tkpi.plan, tkpi.str, tkpi.dir) : null;
+    const pctW = norm !== null ? Math.min(norm/1.2*100,100) : 0;
+    const barColor = norm===null?'#ddd':norm>=1?'#00B050':norm>=0.8?'#FFC107':norm>=0.5?'#FF9800':'#F44336';
+
+    tkDash.innerHTML += `<div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span style="font-weight:600;font-size:12px">${tkpi.name}</span>
+        <span style="font-size:12px">${avgFact!==null?pct(avgFact):'—'} → <strong>${pct(norm)}</strong></span>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-bar" style="width:${pctW}%;background:${barColor}">${norm!==null&&pctW>10?pct(norm):''}</div>
+      </div>
+    </div>`;
+  });
+
+  // Quarter dynamic mini table
+  const qd = document.getElementById('quarterDynamic');
+  let rows = '';
+  for (let wk=1; wk<=13; wk++) {
+    let avgFins = [];
+    ACTIVE.forEach(mgr => {
+      const d = getWeekData(year, q, wk, mgr.id);
+      const pRes = calcPersonalKPI(mgr, d);
+      const tRes = calcTeamKPI(d);
+      const sg   = calcSG(d.sg, d.repeatB);
+      const fin  = calcFinalKPI(pRes.total, tRes.total, sg);
+      if (fin !== null) avgFins.push(fin);
+    });
+    const avg = avgFins.length ? avgFins.reduce((a,b)=>a+b,0)/avgFins.length : null;
+    const isCurrentWeek = wk === w;
+    rows += `<tr ${isCurrentWeek?'style="background:#EEF6FF;font-weight:700"':''}>
+      <td>Неделя ${wk}${isCurrentWeek?' ◀':''}</td>
+      <td>${badge(avg)}</td>
+      <td>${avg!==null?avgFins.length+' руков.':'—'}</td>
+    </tr>`;
+  }
+  qd.innerHTML = `<table>
+    <thead><tr><th>Неделя</th><th>Ср. KPI компании</th><th>Данных</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+// ================================================================
+// RENDER WEEKLY CALC TAB
+// ================================================================
+function renderWeekly() {
+  const year=getYear(), q=getQuarter(), w=getWeek();
+  const container = document.getElementById('weeklyCalc');
+  container.innerHTML = '';
+
+  ACTIVE.forEach(mgr => {
+    const data = getWeekData(year, q, w, mgr.id);
+    const rk = getRoleKey(mgr.role);
+    const kpis = PERSONAL_KPI[rk] || [];
+    const n = kpis.length;
+
+    const pRes = calcPersonalKPI(mgr, data);
+    const tRes = calcTeamKPI(data);
+    const sgC  = calcSG(data.sg, data.repeatB);
+    const fin  = calcFinalKPI(pRes.total, tRes.total, sgC);
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.marginBottom = '20px';
+
+    let html = `<div class="card-header">${mgr.name} — ${mgr.role}</div>`;
+    html += `<div class="card-body" style="overflow-x:auto">`;
+
+    // Personal KPI
+    html += `<div class="card-subheader">А. Личные KPI</div>`;
+    html += `<table><thead><tr>
+      <th>#</th><th class="left">KPI</th><th>Факт</th><th>Напр.</th>
+      <th>Порог</th><th>План</th><th>Стретч</th><th>Нормир.</th><th>Вес</th><th>Взвеш.</th>
+    </tr></thead><tbody>`;
+
+    pRes.details.forEach((d, i) => {
+      const wt = d.w;
+      const contrib = d.norm !== null ? d.norm * wt : null;
+      html += `<tr>
+        <td>${i+1}</td><td class="left">${d.kpi.name}</td>
+        <td>${d.kpi.abs ? (d.fact!==null?d.fact:'—') : pct(d.fact)}</td>
+        <td style="color:${d.kpi.dir==='MIN'?'#c00':'#060'};font-weight:700">${d.kpi.dir}</td>
+        <td>${d.kpi.abs?d.kpi.thr:pct(d.kpi.thr)}</td>
+        <td>${d.kpi.abs?d.kpi.plan:pct(d.kpi.plan)}</td>
+        <td>${d.kpi.abs?d.kpi.str:pct(d.kpi.str)}</td>
+        <td>${pct(d.norm)}</td>
+        <td>${pct(wt)}</td>
+        <td>${pct(contrib)}</td>
+      </tr>`;
+    });
+
+    html += `</tbody><tfoot><tr class="sub-total-row">
+      <td colspan="9" class="left">Итого личные KPI</td><td>${pct(pRes.total)}</td>
+    </tr></tfoot></table>`;
+
+    // Team KPI
+    html += `<div class="card-subheader" style="margin-top:12px">Б. Командные KPI</div>`;
+    html += `<table><thead><tr>
+      <th>#</th><th class="left">KPI</th><th>Факт %</th><th>Напр.</th>
+      <th>Порог</th><th>План</th><th>Стретч</th><th>Нормир.</th><th>Вес</th><th>Взвеш.</th>
+    </tr></thead><tbody>`;
+
+    tRes.details.forEach((d, ti) => {
+      const contrib = d.norm !== null ? d.norm * 0.25 : null;
+      html += `<tr>
+        <td>${ti+1}</td><td class="left">${d.kpi.name}</td>
+        <td>${pct(d.fact)}</td>
+        <td style="color:${d.kpi.dir==='MIN'?'#c00':'#060'};font-weight:700">${d.kpi.dir}</td>
+        <td>${pct(d.kpi.thr)}</td><td>${pct(d.kpi.plan)}</td><td>${pct(d.kpi.str)}</td>
+        <td>${pct(d.norm)}</td><td>25%</td><td>${pct(contrib)}</td>
+      </tr>`;
+    });
+
+    html += `</tbody><tfoot><tr class="sub-total-row">
+      <td colspan="9" class="left">Итого командные KPI</td><td>${pct(tRes.total)}</td>
+    </tr></tfoot></table>`;
+
+    // Final
+    const pw = pRes.total !== null ? pRes.total*0.7 : null;
+    const tw = tRes.total !== null ? tRes.total*0.3 : null;
+    const bsg = pw !== null && tw !== null ? pw + tw : null;
+
+    html += `<div style="margin-top:16px;overflow-x:auto"><table style="width:auto;min-width:400px">
+      <tr><td class="left" style="padding:6px 16px;font-weight:600">Личные KPI × 70%</td>
+          <td style="padding:6px 16px;text-align:center">${pct(pw)}</td></tr>
+      <tr><td class="left" style="padding:6px 16px;font-weight:600">Командные KPI × 30%</td>
+          <td style="padding:6px 16px;text-align:center">${pct(tw)}</td></tr>
+      <tr><td class="left" style="padding:6px 16px;font-weight:600">KPI до Safety Gate</td>
+          <td style="padding:6px 16px;text-align:center">${pct(bsg)}</td></tr>
+      <tr><td class="left" style="padding:6px 16px;font-weight:600">Safety Gate (${data.sg})</td>
+          <td style="padding:6px 16px;text-align:center">× ${sgC.toFixed(2)}</td></tr>
+      <tr class="total-row"><td class="left" style="padding:8px 16px;font-size:14px">🏆 ИТОГОВЫЙ KPI НЕДЕЛИ</td>
+          <td style="padding:8px 16px;font-size:18px;font-weight:800;text-align:center">${badge(fin)}</td></tr>
+    </table></div>`;
+
+    html += `</div>`;
+    card.innerHTML = html;
+    container.appendChild(card);
+  });
+}
+
+// ================================================================
+// RENDER QUARTERLY REPORT
+// ================================================================
+function renderQuarterly() {
+  const year=getYear(), q=getQuarter();
+
+  // Section 1: Summary
+  const summaryTbl = document.getElementById('quarterSummary');
+  const wkHeaders = Array.from({length:13},(_,i)=>`<th>Н.${i+1}</th>`).join('');
+  summaryTbl.querySelector('thead').innerHTML =
+    `<tr><th class="left">ФИО</th><th class="left">Должность</th>${wkHeaders}<th>Среднее</th><th>Мин. SG</th><th>Квартал</th></tr>`;
+
+  const tbody = summaryTbl.querySelector('tbody');
+  tbody.innerHTML = '';
+
+  ACTIVE.forEach(mgr => {
+    let weekKPIs = [], sgCoeffs = [];
+    for (let w=1; w<=13; w++) {
+      const data = getWeekData(year, q, w, mgr.id);
+      const pRes = calcPersonalKPI(mgr, data);
+      const tRes = calcTeamKPI(data);
+      const sgC  = calcSG(data.sg, data.repeatB);
+      const fin  = calcFinalKPI(pRes.total, tRes.total, sgC);
+      weekKPIs.push(fin);
+      sgCoeffs.push(sgC);
+    }
+    const validKPIs = weekKPIs.filter(v=>v!==null);
+    const avg = validKPIs.length ? validKPIs.reduce((a,b)=>a+b,0)/validKPIs.length : null;
+    const minSG = Math.min(...sgCoeffs);
+    const quarter = avg !== null ? avg * minSG : null;
+
+    const cells = weekKPIs.map(v => `<td>${v!==null?`<span class="kpi-badge kpi-${kpiColor(v)}" style="font-size:10px;padding:2px 6px">${pct(v,0)}</span>`:'<span style="color:#ddd">—</span>'}</td>`).join('');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="left" style="font-weight:600">${mgr.name.split(' ').slice(0,2).join(' ')}</td>
+      <td class="left" style="font-size:11px;color:#666">${mgr.role}</td>
+      ${cells}
+      <td>${badge(avg)}</td>
+      <td style="text-align:center">${minSG.toFixed(2)}</td>
+      <td>${badge(quarter)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // Section 2: Team KPI
+  const teamTbl = document.getElementById('teamKpiQuarter');
+  const wkH2 = Array.from({length:13},(_,i)=>`<th>Н.${i+1}</th>`).join('');
+  teamTbl.querySelector('thead').innerHTML = `<tr><th class="left">Командный KPI</th>${wkH2}<th>Среднее</th><th>vs. План</th></tr>`;
+  const tbody2 = teamTbl.querySelector('tbody');
+  tbody2.innerHTML = '';
+
+  TEAM_KPIS.forEach((tkpi, ti) => {
+    let weekFacts = [];
+    for (let w=1; w<=13; w++) {
+      let facts = [];
+      ACTIVE.forEach(mgr => {
+        const data = getWeekData(year, q, w, mgr.id);
+        const num = parseFloat(data.team.num[ti]);
+        const den = parseFloat(data.team.den[ti]);
+        if (!isNaN(num) && !isNaN(den) && den !== 0) facts.push(num/den);
+      });
+      weekFacts.push(facts.length ? facts.reduce((a,b)=>a+b,0)/facts.length : null);
+    }
+    const valid = weekFacts.filter(v=>v!==null);
+    const avg = valid.length ? valid.reduce((a,b)=>a+b,0)/valid.length : null;
+    const vsPlan = avg !== null ? (tkpi.dir==='MAX' ? avg/tkpi.plan-1 : tkpi.plan/avg-1) : null;
+
+    const cells = weekFacts.map(v => `<td>${v!==null?pct(v,0):'—'}</td>`).join('');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="left">${tkpi.name}</td>${cells}
+      <td>${pct(avg)}</td>
+      <td style="color:${vsPlan===null?'#aaa':vsPlan>=0?'#007700':'#cc0000'};font-weight:700">
+        ${vsPlan!==null?(vsPlan>=0?'▲':'▼')+pct(Math.abs(vsPlan)):'—'}
+      </td>
+    `;
+    tbody2.appendChild(tr);
+  });
+
+  // Section 3: Safety Gate log
+  const sgTbl = document.getElementById('sgLog');
+  const wkH3 = Array.from({length:13},(_,i)=>`<th>Н.${i+1}</th>`).join('');
+  sgTbl.querySelector('thead').innerHTML = `<tr><th class="left">ФИО</th>${wkH3}<th>Мин.SG</th><th>Кол. B</th><th>Кол. C</th></tr>`;
+  const tbody3 = sgTbl.querySelector('tbody');
+  tbody3.innerHTML = '';
+
+  ACTIVE.forEach(mgr => {
+    let sgLevels = [], sgCoeffs = [];
+    for (let w=1; w<=13; w++) {
+      const data = getWeekData(year, q, w, mgr.id);
+      sgLevels.push(data.sg || 'A');
+      sgCoeffs.push(calcSG(data.sg, data.repeatB));
+    }
+    const minSG = Math.min(...sgCoeffs);
+    const cntB = sgLevels.filter(s=>s==='B').length;
+    const cntC = sgLevels.filter(s=>s==='C').length;
+
+    const cells = sgLevels.map(s => `<td><span class="sg-badge sg-${s}" style="padding:2px 6px;font-size:10px">${s}</span></td>`).join('');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="left" style="font-weight:600">${mgr.name.split(' ').slice(0,2).join(' ')}</td>
+      ${cells}
+      <td>${minSG.toFixed(2)}</td>
+      <td style="color:${cntB>=2?'#c00':'inherit'};font-weight:${cntB>=2?700:400}">${cntB}${cntB>=2?' ⚠️':''}</td>
+      <td style="color:${cntC>0?'#c00':'inherit'};font-weight:${cntC>0?700:400}">${cntC}${cntC>0?' 🚨':''}</td>
+    `;
+    tbody3.appendChild(tr);
+  });
+}
+
+// (renderHistory and saveData are defined below as async Firebase versions)
+
+// ================================================================
+// EXPORT/IMPORT JSON
+// ================================================================
+function exportJSON() {
+  const data = {
+    state: STATE,
+    history: JSON.parse(localStorage.getItem('ksm_history') || '[]'),
+    exportedAt: new Date().toISOString()
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `KSM_KPI_${getYear()}_${getQuarter()}_backup.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importJSON() {
+  document.getElementById('importFile').click();
+}
+
+function handleImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.state) { STATE = data.state; saveState(); }
+      if (data.history) { localStorage.setItem('ksm_history', JSON.stringify(data.history)); }
+      refreshAll();
+      alert('✅ Данные успешно импортированы!');
+    } catch(err) {
+      alert('❌ Ошибка импорта: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// (clearHistory is defined below as async Firebase version)
+
+// ================================================================
+// RENDER SETTINGS
+// ================================================================
+function renderSettings() {
+  // Threshold table
+  const tbody = document.getElementById('thresholdTable');
+  tbody.innerHTML = TEAM_KPIS.map((k,i) => `
+    <tr>
+      <td class="left">${k.name}</td>
+      <td style="color:${k.dir==='MIN'?'#c00':'#060'};font-weight:700">${k.dir}</td>
+      <td>${pct(k.thr)}</td><td>${pct(k.plan)}</td><td>${pct(k.str)}</td>
+    </tr>`).join('');
+
+  // Manager list
+  const ml = document.getElementById('managerList');
+  ml.innerHTML = MANAGERS.map(m => `
+    <tr>
+      <td>${m.id}</td>
+      <td class="left">${m.name}</td>
+      <td class="left" style="font-size:11px;color:#666">${m.role}</td>
+      <td><span style="color:${m.active?'#00B050':'#aaa'};font-weight:700">${m.active?'✓ Активен':'✗ Вакансия'}</span></td>
+    </tr>`).join('');
+}
+
+// ================================================================
+// RENDER GUIDE
+// ================================================================
+function renderGuide() {
+  const guide = [
+    ['1. Еженедельный ввод', '📝', `
+      Перейдите на вкладку <b>«Ввод данных»</b>.
+      Выберите Год, Квартал и Неделю в верхней панели.
+      Для каждого руководителя введите числитель и знаменатель каждого KPI в жёлтые поля.
+      Факт %, нормировка и итоговый KPI рассчитываются автоматически.
+    `],
+    ['2. Safety Gate', '🚦', `
+      В блоке В каждого руководителя выберите уровень нарушения:
+      <b>A</b> = норма (×1.00) | <b>B</b> = опасное (×0.75) | <b>C</b> = тяжёлое (×0.50).
+      Если в квартале было ≥2 события B, выберите «ДА» в поле «Повторный B» — автоматически применится коэффициент 0.50.
+    `],
+    ['3. Сохранение', '💾', `
+      Данные автоматически сохраняются в браузере (localStorage) при каждом изменении.
+      Для переноса данных между устройствами используйте кнопку <b>«Экспорт JSON»</b> и <b>«Импорт JSON»</b>.
+      Кнопка <b>«Сохранить неделю в историю»</b> фиксирует итог недели в архиве.
+    `],
+    ['4. Расчёт KPI', '📊', `
+      <b>Нормировка MAX</b>: ≤ Порог → 0% | Порог..План → линейно 0–100% | План..Стретч → линейно 100–120% | >Стретч → 120%<br>
+      <b>Нормировка MIN</b>: аналогично, но меньшее значение = лучший результат<br>
+      <b>Итог</b>: (Личные × 70% + Командные × 30%) × Safety Gate
+    `],
+    ['5. Квартальный KPI', '📅', `
+      Квартальный KPI = СРЕДНЕЕ(KPI недель 1..N) × МИН(Safety Gate за квартал).
+      Смотрите вкладку «Квартальный отчёт» для полной разбивки.
+    `],
+    ['6. Дашборд', '🏠', `
+      Дашборд показывает светофор для всех руководителей за текущую неделю,
+      топ-3 лучших и требующих внимания, прогресс командных KPI,
+      и динамику среднего KPI компании по неделям квартала.
+    `],
+    ['7. Цвета светофора', '🎨', `
+      🟢 <b>≥ 100%</b> — цель достигнута<br>
+      🟡 <b>80–99%</b> — приемлемо, требует контроля<br>
+      🟠 <b>60–79%</b> — ниже нормы, нужны действия<br>
+      🔴 <b>&lt; 60%</b> — критично
+    `],
+  ];
+
+  document.getElementById('guideContent').innerHTML = guide.map(([title, icon, text]) => `
+    <div style="margin-bottom:20px;padding:16px;border:1px solid #e0e8f0;border-radius:8px;border-left:4px solid var(--mid-blue)">
+      <div style="font-weight:700;font-size:14px;margin-bottom:8px;color:var(--dark-blue)">${icon} ${title}</div>
+      <div style="font-size:13px;line-height:1.7;color:#444">${text}</div>
+    </div>`).join('');
+}
+
+// ================================================================
+// TABS
+// ================================================================
+function showTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  event.currentTarget.classList.add('active');
+  syncPeriod();
+
+  if (name === 'input')     renderInput();
+  if (name === 'weekly')    renderWeekly();
+  if (name === 'quarterly') renderQuarterly();
+  if (name === 'history')   renderHistory();
+  if (name === 'settings')  renderSettings();
+  if (name === 'guide')     renderGuide();
+  if (name === 'dashboard') renderDashboard();
+}
+
+function refreshAll() {
+  syncPeriod();
+  const active = document.querySelector('.tab-panel.active');
+  if (!active) return;
+  const id = active.id.replace('tab-','');
+  if (id === 'input')     renderInput();
+  if (id === 'weekly')    renderWeekly();
+  if (id === 'quarterly') renderQuarterly();
+  if (id === 'history')   renderHistory();
+  if (id === 'settings')  renderSettings();
+  if (id === 'dashboard') renderDashboard();
+}
+
+// ================================================================
+// HISTORY — use Firestore collection 'history' if available
+// ================================================================
+async function saveData() {
+  const year=getYear(), q=getQuarter(), w=getWeek();
+
+  const newEntries = [];
+  ACTIVE.forEach(mgr => {
+    const data = getWeekData(year, q, w, mgr.id);
+    const pRes = calcPersonalKPI(mgr, data);
+    const tRes = calcTeamKPI(data);
+    const sgC  = calcSG(data.sg, data.repeatB);
+    const fin  = calcFinalKPI(pRes.total, tRes.total, sgC);
+    newEntries.push({
+      year, quarter:q, week:w, mgrId:mgr.id, name:mgr.name, role:mgr.role,
+      personal:pRes.total, team:tRes.total, sg:sgC, final:fin,
+      savedAt: new Date().toISOString(),
+      savedBy: CURRENT_USER?.name || 'неизвестно'
+    });
+  });
+
+  if (!DEMO_MODE && DB) {
+    try {
+      setSyncStatus('saving');
+      const batch = DB.batch();
+      newEntries.forEach(e => {
+        const key = `${e.year}_${e.quarter}_W${e.week}_m${e.mgrId}`;
+        batch.set(DB.collection('history').doc(key), e);
+      });
+      await batch.commit();
+      setSyncStatus('ok');
+    } catch(err) {
+      setSyncStatus('error', 'Ошибка сохранения');
+      console.error(err);
+    }
+  } else {
+    // Demo: localStorage
+    const history = JSON.parse(localStorage.getItem('ksm_history') || '[]');
+    const filtered = history.filter(r => !(r.year===year && r.quarter===q && r.week===w));
+    localStorage.setItem('ksm_history', JSON.stringify([...filtered, ...newEntries]));
+  }
+
+  renderHistory();
+  alert(`✅ Данные недели ${w} сохранены (${ACTIVE.length} руководителей).`);
+}
+
+async function renderHistory() {
+  const tbody = document.getElementById('historyBody');
+  let history = [];
+
+  if (!DEMO_MODE && DB) {
+    try {
+      const snap = await DB.collection('history').orderBy('year').orderBy('week').get();
+      snap.forEach(doc => history.push(doc.data()));
+    } catch(e) { history = []; }
+  } else {
+    history = JSON.parse(localStorage.getItem('ksm_history') || '[]');
+  }
+
+  document.getElementById('historyCount').textContent = history.length;
+  tbody.innerHTML = history.length === 0
+    ? '<tr><td colspan="8" style="text-align:center;color:#aaa;padding:20px">Нет данных. Сохраните недели через кнопку «Сохранить неделю».</td></tr>'
+    : history.map(r => `<tr>
+        <td>${r.year}</td><td>${r.quarter}</td><td>${r.week}</td>
+        <td class="left">${r.name}</td>
+        <td>${pct(r.personal)}</td><td>${pct(r.team)}</td>
+        <td>${r.sg?.toFixed(2)||'—'}</td><td>${badge(r.final)}</td>
+      </tr>`).join('');
+}
+
+async function clearHistory() {
+  if (!confirm('Очистить всю историю? Это действие нельзя отменить.')) return;
+  if (!DEMO_MODE && DB) {
+    const snap = await DB.collection('history').get();
+    const batch = DB.batch();
+    snap.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+  } else {
+    localStorage.removeItem('ksm_history');
+  }
+  renderHistory();
+}
+
+// ================================================================
+// ADMIN: Change PIN
+// ================================================================
+async function changePin(mgrId, newPin) {
+  if (!DB) { alert('Только в режиме Firebase'); return; }
+  if (!/^\d{4}$/.test(newPin)) { alert('PIN должен содержать 4 цифры'); return; }
+  await DB.collection('settings').doc('pins').update({ [mgrId]: newPin });
+  alert('PIN изменён');
+}
+
+// ================================================================
+// INIT
+// ================================================================
+document.addEventListener('DOMContentLoaded', checkAndInit);
+</script>
+</body>
+</html>
 
   body {
     font-family: var(--font);
