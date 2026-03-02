@@ -1178,25 +1178,37 @@ async function loadState() {
   }
 }
 
-function saveState() {
+// Tracks which specific keys were changed — only they get written to Firestore
+const _dirtyKeys = new Set();
+
+function saveState(changedKey) {
   // Always save to localStorage as backup
   localStorage.setItem('ksm_kpi_state', JSON.stringify(STATE));
 
   if (DEMO_MODE || !DB) return;
 
-  // Debounced Firestore save
+  // Mark only the changed document as dirty
+  if (changedKey) _dirtyKeys.add(changedKey);
+  else Object.keys(STATE).forEach(k => _dirtyKeys.add(k)); // fallback: all
+
   setSyncStatus('saving');
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(() => {
+    const keys = [..._dirtyKeys];
+    _dirtyKeys.clear();
+    if (keys.length === 0) return;
+
+    // Firestore batch limit = 500, but we'll never hit it (max ~14 mgrs × 13 weeks = 182)
     const batch = DB.batch();
-    Object.entries(STATE).forEach(([key, val]) => {
-      const ref = DB.collection('kpiData').doc(key);
-      batch.set(ref, val);
+    keys.forEach(key => {
+      if (STATE[key]) {
+        batch.set(DB.collection('kpiData').doc(key), STATE[key]);
+      }
     });
     batch.commit()
       .then(() => setSyncStatus('ok'))
       .catch(e => { console.error(e); setSyncStatus('error', 'Ошибка: ' + e.code); });
-  }, 800);
+  }, 500); // reduced from 800ms → 500ms
 }
 
 // Real-time listener — updates STATE when others change data
@@ -1409,6 +1421,10 @@ function renderInput() {
   const container = document.getElementById('inputSections');
   container.innerHTML = '';
 
+  // Определяем права доступа текущего пользователя
+  const isAdmin = CURRENT_USER?.isAdmin;
+  const myMgrId = CURRENT_USER?.id;
+
   ACTIVE.forEach(mgr => {
     const data = getWeekData(year, quarter, week, mgr.id);
     const rk = getRoleKey(mgr.role);
@@ -1421,17 +1437,24 @@ function renderInput() {
     const final = calcFinalKPI(pResult.total, tResult.total, sgCoeff);
     const color = kpiColor(final);
 
+    // Может ли текущий пользователь редактировать этого менеджера?
+    const canEdit = isAdmin || (mgr.id === myMgrId);
+
     const sec = document.createElement('div');
     sec.className = 'mgr-section';
     sec.id = `mgr-sec-${mgr.id}`;
+    // Чужие секции — слегка приглушены
+    if (!canEdit) sec.style.opacity = '0.75';
 
     // ---- Header ----
     const hdr = document.createElement('div');
     hdr.className = 'mgr-header';
+    hdr.style.background = canEdit ? '' : '#4a6080'; // чужие — темнее
     hdr.innerHTML = `
       <span class="chevron">▼</span>
       <span style="font-size:15px">${mgr.name}</span>
       <span style="opacity:.8;font-size:11px;font-weight:400">${mgr.role}</span>
+      ${!canEdit ? '<span style="font-size:10px;background:rgba(0,0,0,.25);border-radius:10px;padding:2px 8px;margin-left:4px">👁 только просмотр</span>' : ''}
       <span class="mgr-kpi-live" id="live-kpi-${mgr.id}">
         ${final !== null ? `<span class="kpi-badge kpi-${color}">${pct(final)}</span>` : '<span style="color:rgba(255,255,255,.5);font-size:13px">нет данных</span>'}
       </span>
@@ -1455,19 +1478,19 @@ function renderInput() {
 
     kpis.forEach((kpi, i) => {
       const w = kpi.w || (1 / n);
-      let factCell, numCell, denCell;
+      const rowBg = canEdit ? '' : 'style="background:#f5f7fa"';
       if (kpi.abs) {
         const val = data.personal[`abs_${i}`] ?? '';
         const norm = (val !== '') ? normalize(parseFloat(val), kpi.thr, kpi.plan, kpi.str, kpi.dir) : null;
-        numCell = `<input type="number" min="0" style="width:90px" value="${val}"
-          oninput="updatePersonalAbs(${mgr.id},${i},this.value)"
-          placeholder="0">`;
-        denCell = `<td style="color:#aaa;text-align:center">абс.</td>`;
-        factCell = `<td><span class="cell-formula">${val !== '' ? val : '—'}</span></td>`;
-        html += `<tr>
+        const inputCell = canEdit
+          ? `<input type="number" min="0" style="width:90px" value="${val}" oninput="updatePersonalAbs(${mgr.id},${i},this.value)" placeholder="0">`
+          : `<span class="cell-formula" style="color:#555">${val !== '' ? val : '—'}</span>`;
+        html += `<tr ${rowBg}>
           <td>${i+1}</td>
           <td class="left">${kpi.name}<br><small style="color:#999;font-weight:400;font-size:10px">${kpi.num}</small></td>
-          <td>${numCell}</td>${denCell}${factCell}
+          <td${canEdit ? ' class="yellow-cell"' : ''}>${inputCell}</td>
+          <td style="color:#aaa;text-align:center">абс.</td>
+          <td><span class="cell-formula">${val !== '' ? val : '—'}</span></td>
           <td><span style="color:${kpi.dir==='MIN'?'#c00':'#060'};font-weight:700">${kpi.dir}</span></td>
           <td>${kpi.thr}</td><td>${kpi.plan}</td><td>${kpi.str}</td>
           <td><span class="cell-formula" id="norm-p-${mgr.id}-${i}">${pct(norm)}</span></td>
@@ -1479,13 +1502,17 @@ function renderInput() {
         const num = parseFloat(numV), den = parseFloat(denV);
         const fact = (!isNaN(num) && !isNaN(den) && den !== 0) ? num/den : null;
         const norm = fact !== null ? normalize(fact, kpi.thr, kpi.plan, kpi.str, kpi.dir) : null;
-        html += `<tr>
+        const numInput = canEdit
+          ? `<input type="number" min="0" style="width:90px" value="${numV}" oninput="updatePersonal(${mgr.id},${i},'num',this.value)" placeholder="числ.">`
+          : `<span class="cell-formula" style="color:#555">${numV !== '' ? numV : '—'}</span>`;
+        const denInput = canEdit
+          ? `<input type="number" min="0" style="width:90px" value="${denV}" oninput="updatePersonal(${mgr.id},${i},'den',this.value)" placeholder="знам.">`
+          : `<span class="cell-formula" style="color:#555">${denV !== '' ? denV : '—'}</span>`;
+        html += `<tr ${rowBg}>
           <td>${i+1}</td>
           <td class="left">${kpi.name}<br><small style="color:#999;font-weight:400;font-size:10px">${kpi.num} / ${kpi.den||'база'}</small></td>
-          <td><input type="number" min="0" style="width:90px" value="${numV}"
-            oninput="updatePersonal(${mgr.id},${i},'num',this.value)" placeholder="числ."></td>
-          <td><input type="number" min="0" style="width:90px" value="${denV}"
-            oninput="updatePersonal(${mgr.id},${i},'den',this.value)" placeholder="знам."></td>
+          <td${canEdit ? ' class="yellow-cell"' : ''}>${numInput}</td>
+          <td${canEdit ? ' class="yellow-cell"' : ''}>${denInput}</td>
           <td><span class="cell-formula" id="fact-p-${mgr.id}-${i}">${pct(fact)}</span></td>
           <td><span style="color:${kpi.dir==='MIN'?'#c00':'#060'};font-weight:700">${kpi.dir}</span></td>
           <td>${pct(kpi.thr)}</td><td>${pct(kpi.plan)}</td><td>${pct(kpi.str)}</td>
@@ -1561,28 +1588,49 @@ function renderInput() {
     const rbSel = (val) => `<option value="${val}" ${String(data.repeatB)===(val)?'selected':''}>${val==='true'?'ДА':'НЕТ'}</option>`;
 
     html += `<div class="block-label">В — Safety Gate</div>`;
-    html += `<div class="sg-grid">
-      <div class="sg-item">
-        <label>Уровень нарушения</label>
-        <select onchange="updateSG(${mgr.id},'sg',this.value)">
-          ${sgSel('A')}${sgSel('B')}${sgSel('C')}
-        </select>
-      </div>
-      <div class="sg-item">
-        <label>Коэффициент SG</label>
-        <div class="sg-badge sg-${data.sg}" id="sg-coeff-${mgr.id}">${sgCoeff.toFixed(2)}</div>
-      </div>
-      <div class="sg-item">
-        <label>Повторный B в квартале?</label>
-        <select onchange="updateSG(${mgr.id},'repeatB',this.value==='true')">
-          ${rbSel('false')}${rbSel('true')}
-        </select>
-      </div>
-      <div class="sg-item">
-        <label>Итоговый коэффициент</label>
-        <div class="sg-badge sg-${data.sg}" id="sg-final-${mgr.id}">${calcSG(data.sg, data.repeatB).toFixed(2)}</div>
-      </div>
-    </div>`;
+    if (canEdit) {
+      html += `<div class="sg-grid">
+        <div class="sg-item">
+          <label>Уровень нарушения</label>
+          <select onchange="updateSG(${mgr.id},'sg',this.value)">
+            ${sgSel('A')}${sgSel('B')}${sgSel('C')}
+          </select>
+        </div>
+        <div class="sg-item">
+          <label>Коэффициент SG</label>
+          <div class="sg-badge sg-${data.sg}" id="sg-coeff-${mgr.id}">${sgCoeff.toFixed(2)}</div>
+        </div>
+        <div class="sg-item">
+          <label>Повторный B в квартале?</label>
+          <select onchange="updateSG(${mgr.id},'repeatB',this.value==='true')">
+            ${rbSel('false')}${rbSel('true')}
+          </select>
+        </div>
+        <div class="sg-item">
+          <label>Итоговый коэффициент</label>
+          <div class="sg-badge sg-${data.sg}" id="sg-final-${mgr.id}">${calcSG(data.sg, data.repeatB).toFixed(2)}</div>
+        </div>
+      </div>`;
+    } else {
+      html += `<div class="sg-grid" style="opacity:.7;pointer-events:none">
+        <div class="sg-item">
+          <label>Уровень нарушения</label>
+          <div class="sg-badge sg-${data.sg}">${data.sg}</div>
+        </div>
+        <div class="sg-item">
+          <label>Коэффициент SG</label>
+          <div class="sg-badge sg-${data.sg}" id="sg-coeff-${mgr.id}">${sgCoeff.toFixed(2)}</div>
+        </div>
+        <div class="sg-item">
+          <label>Повторный B в квартале?</label>
+          <div style="padding:6px 12px;background:#f0f4f8;border-radius:6px;font-weight:600">${data.repeatB ? 'ДА' : 'НЕТ'}</div>
+        </div>
+        <div class="sg-item">
+          <label>Итоговый коэффициент</label>
+          <div class="sg-badge sg-${data.sg}" id="sg-final-${mgr.id}">${calcSG(data.sg, data.repeatB).toFixed(2)}</div>
+        </div>
+      </div>`;
+    }
 
     // --- Итоговый расчёт ---
     html += `<div style="margin-top:16px;padding:12px;background:#F8FBFF;border-radius:8px;border:1px solid var(--light-blue)">
@@ -1612,35 +1660,39 @@ function renderInput() {
 
 function updatePersonal(mgrId, kpiIdx, field, value) {
   const year=getYear(), q=getQuarter(), w=getWeek();
+  const key = stateKey(year, q, w, mgrId);
   const data = getWeekData(year, q, w, mgrId);
   data.personal[`${field}_${kpiIdx}`] = value;
-  saveState();
+  saveState(key);
   recalcMgr(mgrId);
 }
 
 function updatePersonalAbs(mgrId, kpiIdx, value) {
   const year=getYear(), q=getQuarter(), w=getWeek();
+  const key = stateKey(year, q, w, mgrId);
   const data = getWeekData(year, q, w, mgrId);
   data.personal[`abs_${kpiIdx}`] = value;
-  saveState();
+  saveState(key);
   recalcMgr(mgrId);
 }
 
 function updateTeam(mgrId, kpiIdx, field, value) {
   const year=getYear(), q=getQuarter(), w=getWeek();
   // Командные KPI всегда пишутся в запись COO (общие для всех)
+  const cooKey = stateKey(year, q, w, COO_MGR_ID);
   const cooData = getWeekData(year, q, w, COO_MGR_ID);
   cooData.team[field][kpiIdx] = value;
-  saveState();
+  saveState(cooKey);
   // Пересчитать всех активных менеджеров (командный KPI общий)
   ACTIVE.forEach(m => recalcMgr(m.id));
 }
 
 function updateSG(mgrId, field, value) {
   const year=getYear(), q=getQuarter(), w=getWeek();
+  const key = stateKey(year, q, w, mgrId);
   const data = getWeekData(year, q, w, mgrId);
   data[field] = value;
-  saveState();
+  saveState(key);
   recalcMgr(mgrId);
 }
 
