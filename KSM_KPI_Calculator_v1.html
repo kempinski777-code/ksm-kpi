@@ -780,6 +780,21 @@
     </div>
 
   </div>
+
+  <!-- Панель управления сотрудниками — только для администратора -->
+  <div id="adminManagerCard" style="display:none;margin-top:16px">
+    <div class="card">
+      <div class="card-header" style="background:#7f1d1d">
+        🔐 Управление сотрудниками <span style="font-size:11px;font-weight:400;opacity:.8">(только администратор)</span>
+      </div>
+      <div class="card-body">
+        <div id="managerAdminPanel">
+          <div style="color:#aaa;text-align:center;padding:20px">Загрузка...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- ================================================================ -->
@@ -804,7 +819,8 @@
 // DATA
 // ================================================================
 
-const MANAGERS = [
+// MANAGERS загружается из Firestore при старте; ниже — резервный список
+let MANAGERS = [
   {id:1,  name:'Мун Дмитрий Анатольевич',     role:'Операционный директор (COO)',           active:true},
   {id:2,  name:'Мун Ольга Анатольевна',       role:'Финансовый директор (CFO)',             active:true},
   {id:3,  name:'Ким Андрей Алексеевич',       role:'Коммерческий директор',                active:true},
@@ -820,7 +836,10 @@ const MANAGERS = [
   {id:13, name:'Швецов Кирилл Анатольевич',   role:'Начальник R&D',                        active:true},
   {id:14, name:'(вакансия)',                   role:'Руководитель службы заботы о клиентах',active:true},
 ];
-const ACTIVE = MANAGERS.filter(m => m.active);
+// Всегда вычисляется динамически
+function getActive() { return MANAGERS.filter(m => m.active); }
+// Для обратной совместимости — прокси-геттер
+Object.defineProperty(window, 'ACTIVE', { get: getActive, configurable: true });
 
 const PERSONAL_KPI = {
   'COO': [
@@ -1117,8 +1136,8 @@ function finishLogin(mgr, demo) {
   document.getElementById('app').style.flexDirection = 'column';
   document.getElementById('app').style.minHeight = '100vh';
 
-  // Init
-  loadState().then(() => {
+  // Init — сначала загружаем список менеджеров, потом данные KPI
+  loadManagers().then(() => loadState()).then(() => {
     populateWeekSelects();
     syncPeriod();
     const now = new Date();
@@ -1172,10 +1191,167 @@ async function loadState() {
     snap.forEach(doc => { STATE[doc.id] = doc.data(); });
   } catch(e) {
     console.warn('Firestore loadState error', e);
-    // Fallback to localStorage
     const raw = localStorage.getItem('ksm_kpi_state');
     STATE = raw ? JSON.parse(raw) : {};
   }
+}
+
+// ================================================================
+// MANAGERS — загрузка и сохранение в Firestore
+// ================================================================
+async function loadManagers() {
+  if (DEMO_MODE || !DB) return; // используем встроенный список
+  try {
+    const doc = await DB.collection('settings').doc('managers').get();
+    if (doc.exists && doc.data().list && doc.data().list.length > 0) {
+      MANAGERS = doc.data().list;
+      console.log('Менеджеры загружены из Firestore:', MANAGERS.length);
+    } else {
+      // Первый запуск — сохраняем встроенный список в Firestore
+      await saveManagers();
+    }
+  } catch(e) { console.warn('loadManagers error', e); }
+}
+
+async function saveManagers() {
+  if (DEMO_MODE || !DB) return;
+  try {
+    await DB.collection('settings').doc('managers').set({ list: MANAGERS });
+    // Обновляем список входа
+    showLoginStep();
+  } catch(e) { console.error('saveManagers error', e); }
+}
+
+// Получить следующий свободный ID
+function nextManagerId() {
+  return MANAGERS.length > 0 ? Math.max(...MANAGERS.map(m => m.id)) + 1 : 1;
+}
+
+// Добавить нового сотрудника
+async function addManager(name, role) {
+  if (!name.trim() || !role) { alert('Заполните имя и должность'); return; }
+  const newMgr = { id: nextManagerId(), name: name.trim(), role, active: true };
+  MANAGERS.push(newMgr);
+  // Создать PIN по умолчанию
+  if (DB) {
+    await DB.collection('settings').doc('pins').update({ [newMgr.id]: '1111' });
+  }
+  await saveManagers();
+  renderManagerAdmin();
+  renderSettings();
+  alert(`✅ Сотрудник «${newMgr.name}» добавлен. PIN: 1111`);
+}
+
+// Изменить имя
+async function renameManager(id, newName) {
+  const mgr = MANAGERS.find(m => m.id === id);
+  if (!mgr || !newName.trim()) return;
+  mgr.name = newName.trim();
+  await saveManagers();
+}
+
+// Переключить активность (уволить / восстановить)
+async function toggleManagerActive(id) {
+  const mgr = MANAGERS.find(m => m.id === id);
+  if (!mgr) return;
+  if (mgr.active && MANAGERS.filter(m => m.active).length <= 1) {
+    alert('Нельзя деактивировать последнего сотрудника'); return;
+  }
+  mgr.active = !mgr.active;
+  await saveManagers();
+  renderManagerAdmin();
+  renderSettings();
+}
+
+// Сменить PIN сотруднику
+async function changePinForMgr(id, newPin) {
+  if (!/^\d{4}$/.test(newPin)) { alert('PIN — 4 цифры'); return; }
+  if (!DB) { alert('Только в режиме Firebase'); return; }
+  await DB.collection('settings').doc('pins').update({ [id]: newPin });
+  alert('✅ PIN изменён');
+}
+
+// Рендер панели управления сотрудниками (только для admin)
+function renderManagerAdmin() {
+  const container = document.getElementById('managerAdminPanel');
+  if (!container) return;
+
+  const roles = Object.keys(PERSONAL_KPI);
+
+  container.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px">
+      <thead>
+        <tr style="background:#1F4E79;color:#fff">
+          <th style="padding:8px;text-align:left">ID</th>
+          <th style="padding:8px;text-align:left">ФИО</th>
+          <th style="padding:8px;text-align:left">Должность</th>
+          <th style="padding:8px">Статус</th>
+          <th style="padding:8px">PIN</th>
+          <th style="padding:8px">Действия</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${MANAGERS.map(m => `
+          <tr style="border-bottom:1px solid #eee;${!m.active?'opacity:.55':''}">
+            <td style="padding:6px 8px;color:#888">${m.id}</td>
+            <td style="padding:6px 8px">
+              <input type="text" value="${m.name}"
+                style="border:1px solid #ddd;border-radius:4px;padding:3px 6px;width:190px;font-size:12px"
+                onblur="renameManager(${m.id}, this.value)">
+            </td>
+            <td style="padding:6px 8px;font-size:11px;color:#555">${m.role}</td>
+            <td style="padding:6px 8px;text-align:center">
+              <span style="background:${m.active?'#00B050':'#aaa'};color:#fff;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700">
+                ${m.active ? '✓ Активен' : '✗ Неактивен'}
+              </span>
+            </td>
+            <td style="padding:6px 8px;text-align:center">
+              <button onclick="promptChangePin(${m.id})"
+                style="background:#f0f4f8;border:1px solid #BDD7EE;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer">
+                🔑 PIN
+              </button>
+            </td>
+            <td style="padding:6px 8px;text-align:center">
+              <button onclick="toggleManagerActive(${m.id})"
+                style="background:${m.active?'#fff0f0':'#f0fff4'};border:1px solid ${m.active?'#ffcdd2':'#b7ebc8'};border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;color:${m.active?'#c00':'#2e7d32'}">
+                ${m.active ? '🚫 Деактивировать' : '✅ Восстановить'}
+              </button>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+
+    <div style="background:#f0f8ff;border:1px solid #BDD7EE;border-radius:10px;padding:16px">
+      <div style="font-weight:700;color:#1F4E79;margin-bottom:12px">➕ Добавить нового сотрудника</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+        <div>
+          <label style="font-size:11px;color:#666;display:block;margin-bottom:4px">ФИО</label>
+          <input type="text" id="newMgrName" placeholder="Фамилия Имя Отчество"
+            style="border:1px solid #BDD7EE;border-radius:6px;padding:6px 10px;width:220px;font-size:13px">
+        </div>
+        <div>
+          <label style="font-size:11px;color:#666;display:block;margin-bottom:4px">Должность (роль KPI)</label>
+          <select id="newMgrRole"
+            style="border:1px solid #BDD7EE;border-radius:6px;padding:6px 10px;font-size:13px;min-width:220px">
+            <option value="">— выберите роль —</option>
+            ${roles.map(r => `<option value="${r}">${r}</option>`).join('')}
+          </select>
+        </div>
+        <button onclick="addManager(document.getElementById('newMgrName').value, document.getElementById('newMgrRole').value)"
+          style="background:#1F4E79;color:#fff;border:none;border-radius:6px;padding:8px 20px;font-size:13px;cursor:pointer;font-weight:700">
+          ➕ Добавить
+        </button>
+      </div>
+      <div style="margin-top:8px;font-size:11px;color:#888">
+        💡 Новый сотрудник получит PIN <b>1111</b> по умолчанию. Смените через кнопку 🔑 PIN.
+      </div>
+    </div>
+  `;
+}
+
+function promptChangePin(mgrId) {
+  const pin = prompt('Введите новый PIN (4 цифры) для сотрудника:');
+  if (pin !== null) changePinForMgr(mgrId, pin);
 }
 
 // Tracks which specific keys were changed — only they get written to Firestore
@@ -2146,7 +2322,7 @@ function renderSettings() {
       <td>${pct(k.thr)}</td><td>${pct(k.plan)}</td><td>${pct(k.str)}</td>
     </tr>`).join('');
 
-  // Manager list
+  // Manager list (краткий — для всех)
   const ml = document.getElementById('managerList');
   ml.innerHTML = MANAGERS.map(m => `
     <tr>
@@ -2155,6 +2331,17 @@ function renderSettings() {
       <td class="left" style="font-size:11px;color:#666">${m.role}</td>
       <td><span style="color:${m.active?'#00B050':'#aaa'};font-weight:700">${m.active?'✓ Активен':'✗ Вакансия'}</span></td>
     </tr>`).join('');
+
+  // Панель управления — только для администратора
+  const adminCard = document.getElementById('adminManagerCard');
+  if (adminCard) {
+    if (CURRENT_USER?.isAdmin) {
+      adminCard.style.display = 'block';
+      renderManagerAdmin();
+    } else {
+      adminCard.style.display = 'none';
+    }
+  }
 }
 
 // ================================================================
