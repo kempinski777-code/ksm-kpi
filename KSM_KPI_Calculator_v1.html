@@ -795,6 +795,25 @@
     </div>
   </div>
 
+  <!-- Панель управления должностями и KPI — только для администратора -->
+  <div id="adminRolesCard" style="display:none;margin-top:16px">
+    <div class="card">
+      <div class="card-header" style="background:#1a3a5c">
+        📋 Управление должностями и KPI <span style="font-size:11px;font-weight:400;opacity:.8">(только администратор)</span>
+      </div>
+      <div class="card-body">
+        <div style="margin-bottom:12px;font-size:12px;color:#555;background:#fff9e6;border-left:3px solid #FFC107;padding:8px 12px;border-radius:0 6px 6px 0">
+          ⚠️ Изменения в KPI применяются немедленно и синхронизируются по всем пользователям.
+          Сумма весов по каждой должности должна равняться 1.00.
+          Если вес не задан — все KPI получают равный вес автоматически.
+        </div>
+        <div id="rolesAdminPanel">
+          <div style="color:#aaa;text-align:center;padding:20px">Загрузка...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- ================================================================ -->
@@ -841,7 +860,7 @@ function getActive() { return MANAGERS.filter(m => m.active); }
 // Для обратной совместимости — прокси-геттер
 Object.defineProperty(window, 'ACTIVE', { get: getActive, configurable: true });
 
-const PERSONAL_KPI = {
+let PERSONAL_KPI = {
   'COO': [
     {name:'Стабильность замороженного плана', num:'Изменения в зоне заморозки', den:'Позиции плана',   dir:'MIN', thr:0.15, plan:0.05, str:0.00},
     {name:'Простои по внутренним причинам',   num:'Н-ч простоев (абс.)',        den:null,              dir:'MIN', thr:100,  plan:40,   str:0,   abs:true},
@@ -940,6 +959,9 @@ const TEAM_KPIS = [
 ];
 
 function getRoleKey(role) {
+  // Exact match first — handles dynamically added roles
+  if (PERSONAL_KPI[role]) return role;
+  // Fallback substring matching for built-in roles
   if (role.includes('COO')) return 'COO';
   if (role.includes('CFO')) return 'CFO';
   if (role.includes('омм')) return 'Коммерческий директор';
@@ -1136,8 +1158,8 @@ function finishLogin(mgr, demo) {
   document.getElementById('app').style.flexDirection = 'column';
   document.getElementById('app').style.minHeight = '100vh';
 
-  // Init — сначала загружаем список менеджеров, потом данные KPI
-  loadManagers().then(() => loadState()).then(() => {
+  // Init — загружаем менеджеров, потом роли/KPI, потом данные
+  loadManagers().then(() => loadRoles()).then(() => loadState()).then(() => {
     populateWeekSelects();
     syncPeriod();
     const now = new Date();
@@ -1220,6 +1242,33 @@ async function saveManagers() {
     // Обновляем список входа
     showLoginStep();
   } catch(e) { console.error('saveManagers error', e); }
+}
+
+// ================================================================
+// ROLES / KPI — загрузка и сохранение в Firestore
+// ================================================================
+async function loadRoles() {
+  if (DEMO_MODE || !DB) return; // используем встроенный PERSONAL_KPI
+  try {
+    const doc = await DB.collection('settings').doc('roles').get();
+    if (doc.exists && doc.data().roles) {
+      // Merge: built-in roles + custom saved roles
+      const saved = doc.data().roles;
+      // Overwrite built-in with saved (admin may have edited them)
+      Object.assign(PERSONAL_KPI, saved);
+      console.log('Должности загружены из Firestore:', Object.keys(PERSONAL_KPI).length);
+    } else {
+      // First run — save current built-in to Firestore
+      await saveRoles();
+    }
+  } catch(e) { console.warn('loadRoles error', e); }
+}
+
+async function saveRoles() {
+  if (DEMO_MODE || !DB) return;
+  try {
+    await DB.collection('settings').doc('roles').set({ roles: PERSONAL_KPI });
+  } catch(e) { console.error('saveRoles error', e); }
 }
 
 // Получить следующий свободный ID
@@ -1352,6 +1401,208 @@ function renderManagerAdmin() {
 function promptChangePin(mgrId) {
   const pin = prompt('Введите новый PIN (4 цифры) для сотрудника:');
   if (pin !== null) changePinForMgr(mgrId, pin);
+}
+
+// ================================================================
+// ROLES ADMIN — управление должностями и KPI через интерфейс
+// ================================================================
+
+function renderRolesAdmin() {
+  const container = document.getElementById('rolesAdminPanel');
+  if (!container) return;
+
+  const roleNames = Object.keys(PERSONAL_KPI);
+
+  let html = '';
+
+  // List of existing roles
+  roleNames.forEach(roleName => {
+    const kpis = PERSONAL_KPI[roleName];
+    const totalW = kpis.reduce((s, k) => s + (k.w !== undefined ? k.w : 1 / kpis.length), 0);
+    const warnW = Math.abs(totalW - 1) > 0.01;
+
+    html += `
+    <div style="border:1px solid #BDD7EE;border-radius:8px;margin-bottom:12px;overflow:hidden">
+      <div style="background:#e8f0fe;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer"
+           onclick="toggleRoleExpand('${escHtml(roleName)}')">
+        <span style="font-weight:700;color:#1F4E79;font-size:13px">📋 ${escHtml(roleName)}</span>
+        <span style="font-size:11px;color:#666">${kpis.length} KPI${warnW ? ' ⚠️ сумма весов ≠1' : ''}</span>
+      </div>
+      <div id="role-expand-${btoa(unescape(encodeURIComponent(roleName))).replace(/[^a-zA-Z0-9]/g,'_')}" style="display:none;padding:12px">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:10px">
+          <thead>
+            <tr style="background:#f0f4f8">
+              <th style="padding:5px 6px;text-align:left">KPI</th>
+              <th style="padding:5px 6px">Числитель</th>
+              <th style="padding:5px 6px">Знаменатель</th>
+              <th style="padding:5px 6px">Напр.</th>
+              <th style="padding:5px 6px">Порог</th>
+              <th style="padding:5px 6px">План</th>
+              <th style="padding:5px 6px">Стретч</th>
+              <th style="padding:5px 6px">Вес</th>
+              <th style="padding:5px 6px">Абс.</th>
+              <th style="padding:5px 6px">Удалить</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${kpis.map((k, ki) => `
+            <tr style="border-bottom:1px solid #eee">
+              <td style="padding:4px 6px;max-width:180px"><input type="text" value="${escHtml(k.name)}"
+                style="width:100%;border:1px solid #ddd;border-radius:3px;padding:2px 4px;font-size:11px"
+                onblur="updateKpiField('${escHtml(roleName)}',${ki},'name',this.value)"></td>
+              <td style="padding:4px 6px"><input type="text" value="${escHtml(k.num)}"
+                style="width:110px;border:1px solid #ddd;border-radius:3px;padding:2px 4px;font-size:11px"
+                onblur="updateKpiField('${escHtml(roleName)}',${ki},'num',this.value)"></td>
+              <td style="padding:4px 6px"><input type="text" value="${k.den ? escHtml(k.den) : ''}"
+                placeholder="(пусто если абс.)"
+                style="width:110px;border:1px solid #ddd;border-radius:3px;padding:2px 4px;font-size:11px"
+                onblur="updateKpiField('${escHtml(roleName)}',${ki},'den',this.value||null)"></td>
+              <td style="padding:4px 6px;text-align:center">
+                <select style="border:1px solid #ddd;border-radius:3px;padding:2px;font-size:11px"
+                  onchange="updateKpiField('${escHtml(roleName)}',${ki},'dir',this.value)">
+                  <option value="MAX"${k.dir==='MAX'?' selected':''}>MAX</option>
+                  <option value="MIN"${k.dir==='MIN'?' selected':''}>MIN</option>
+                </select>
+              </td>
+              <td style="padding:4px 6px;text-align:center"><input type="number" value="${k.thr}" step="0.01"
+                style="width:60px;border:1px solid #ddd;border-radius:3px;padding:2px 4px;font-size:11px;text-align:center"
+                onblur="updateKpiField('${escHtml(roleName)}',${ki},'thr',parseFloat(this.value))"></td>
+              <td style="padding:4px 6px;text-align:center"><input type="number" value="${k.plan}" step="0.01"
+                style="width:60px;border:1px solid #ddd;border-radius:3px;padding:2px 4px;font-size:11px;text-align:center"
+                onblur="updateKpiField('${escHtml(roleName)}',${ki},'plan',parseFloat(this.value))"></td>
+              <td style="padding:4px 6px;text-align:center"><input type="number" value="${k.str}" step="0.01"
+                style="width:60px;border:1px solid #ddd;border-radius:3px;padding:2px 4px;font-size:11px;text-align:center"
+                onblur="updateKpiField('${escHtml(roleName)}',${ki},'str',parseFloat(this.value))"></td>
+              <td style="padding:4px 6px;text-align:center"><input type="number" value="${k.w !== undefined ? k.w : ''}" step="0.01" placeholder="авто"
+                style="width:55px;border:1px solid #ddd;border-radius:3px;padding:2px 4px;font-size:11px;text-align:center"
+                onblur="updateKpiField('${escHtml(roleName)}',${ki},'w',this.value===''?undefined:parseFloat(this.value))"></td>
+              <td style="padding:4px 6px;text-align:center">
+                <input type="checkbox" ${k.abs?'checked':''} title="Абсолютное значение (знаменатель не нужен)"
+                  onchange="updateKpiField('${escHtml(roleName)}',${ki},'abs',this.checked)">
+              </td>
+              <td style="padding:4px 6px;text-align:center">
+                <button onclick="removeKpiFromRole('${escHtml(roleName)}',${ki})"
+                  style="background:#fff0f0;border:1px solid #ffcdd2;border-radius:4px;padding:2px 6px;font-size:11px;cursor:pointer;color:#c00">
+                  ✕
+                </button>
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button onclick="addKpiToRole('${escHtml(roleName)}')"
+            style="background:#e8f5e9;border:1px solid #b7ebc8;border-radius:6px;padding:5px 14px;font-size:12px;cursor:pointer;color:#2e7d32;font-weight:600">
+            ➕ Добавить KPI
+          </button>
+          <button onclick="deleteRole('${escHtml(roleName)}')"
+            style="background:#fff0f0;border:1px solid #ffcdd2;border-radius:6px;padding:5px 14px;font-size:12px;cursor:pointer;color:#c00;font-weight:600">
+            🗑 Удалить должность
+          </button>
+        </div>
+      </div>
+    </div>`;
+  });
+
+  // Add new role form
+  html += `
+    <div style="background:#f0f8ff;border:1px solid #BDD7EE;border-radius:10px;padding:16px;margin-top:8px">
+      <div style="font-weight:700;color:#1F4E79;margin-bottom:12px">➕ Добавить новую должность</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+        <div>
+          <label style="font-size:11px;color:#666;display:block;margin-bottom:4px">Название должности</label>
+          <input type="text" id="newRoleName" placeholder="Например: Руководитель IT"
+            style="border:1px solid #BDD7EE;border-radius:6px;padding:6px 10px;width:260px;font-size:13px">
+        </div>
+        <button onclick="addRole()"
+          style="background:#1F4E79;color:#fff;border:none;border-radius:6px;padding:8px 20px;font-size:13px;cursor:pointer;font-weight:700">
+          ➕ Создать
+        </button>
+      </div>
+      <div style="margin-top:8px;font-size:11px;color:#888">
+        💡 После создания должности — раскройте её и добавьте KPI. Новая должность появится в списке ролей при добавлении сотрудника.
+      </div>
+    </div>`;
+
+  container.innerHTML = html;
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;');
+}
+
+function toggleRoleExpand(roleName) {
+  const id = 'role-expand-' + btoa(unescape(encodeURIComponent(roleName))).replace(/[^a-zA-Z0-9]/g,'_');
+  const el = document.getElementById(id);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function addRole() {
+  const nameInput = document.getElementById('newRoleName');
+  const name = nameInput ? nameInput.value.trim() : '';
+  if (!name) { alert('Введите название должности'); return; }
+  if (PERSONAL_KPI[name]) { alert('Должность с таким названием уже существует'); return; }
+  PERSONAL_KPI[name] = [];
+  await saveRoles();
+  renderRolesAdmin();
+  // Refresh role dropdown in manager admin panel
+  renderManagerAdmin();
+  nameInput.value = '';
+  alert(`✅ Должность «${name}» создана. Теперь раскройте её и добавьте KPI.`);
+}
+
+async function deleteRole(roleName) {
+  // Check if any manager uses this role
+  const used = MANAGERS.filter(m => m.role === roleName);
+  if (used.length > 0) {
+    const names = used.map(m => m.name).join(', ');
+    if (!confirm(`Эта должность используется сотрудниками: ${names}.\nУдалить всё равно?`)) return;
+  } else {
+    if (!confirm(`Удалить должность «${roleName}» и все её KPI?\nЭто действие нельзя отменить.`)) return;
+  }
+  delete PERSONAL_KPI[roleName];
+  await saveRoles();
+  renderRolesAdmin();
+  renderManagerAdmin();
+}
+
+async function addKpiToRole(roleName) {
+  if (!PERSONAL_KPI[roleName]) return;
+  const kpiName = prompt('Название нового KPI:');
+  if (!kpiName || !kpiName.trim()) return;
+  PERSONAL_KPI[roleName].push({
+    name: kpiName.trim(),
+    num: 'Факт',
+    den: 'План',
+    dir: 'MAX',
+    thr: 0.70,
+    plan: 1.00,
+    str: 1.20,
+    w: undefined
+  });
+  await saveRoles();
+  renderRolesAdmin();
+}
+
+async function removeKpiFromRole(roleName, index) {
+  if (!PERSONAL_KPI[roleName]) return;
+  const kpi = PERSONAL_KPI[roleName][index];
+  if (!confirm(`Удалить KPI «${kpi.name}» из должности «${roleName}»?`)) return;
+  PERSONAL_KPI[roleName].splice(index, 1);
+  await saveRoles();
+  renderRolesAdmin();
+}
+
+async function updateKpiField(roleName, index, field, value) {
+  if (!PERSONAL_KPI[roleName] || !PERSONAL_KPI[roleName][index]) return;
+  if (value === undefined || value === null) {
+    delete PERSONAL_KPI[roleName][index][field];
+  } else {
+    PERSONAL_KPI[roleName][index][field] = value;
+  }
+  await saveRoles();
+  // No full re-render to avoid losing focus; just mark saved
+  setSyncStatus('ok');
 }
 
 // Tracks which specific keys were changed — only they get written to Firestore
@@ -2332,14 +2583,24 @@ function renderSettings() {
       <td><span style="color:${m.active?'#00B050':'#aaa'};font-weight:700">${m.active?'✓ Активен':'✗ Вакансия'}</span></td>
     </tr>`).join('');
 
-  // Панель управления — только для администратора
+  // Панели управления — только для администратора
   const adminCard = document.getElementById('adminManagerCard');
+  const rolesCard = document.getElementById('adminRolesCard');
+  const isAdmin = CURRENT_USER?.isAdmin;
   if (adminCard) {
-    if (CURRENT_USER?.isAdmin) {
+    if (isAdmin) {
       adminCard.style.display = 'block';
       renderManagerAdmin();
     } else {
       adminCard.style.display = 'none';
+    }
+  }
+  if (rolesCard) {
+    if (isAdmin) {
+      rolesCard.style.display = 'block';
+      renderRolesAdmin();
+    } else {
+      rolesCard.style.display = 'none';
     }
   }
 }
