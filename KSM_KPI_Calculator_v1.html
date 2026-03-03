@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>KSM KPI | Группа компаний KSM</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%231F4E79'/><rect x='4' y='21' width='6' height='7' rx='1.5' fill='%234FC3F7'/><rect x='13' y='15' width='6' height='13' rx='1.5' fill='%234FC3F7'/><rect x='22' y='8' width='6' height='20' rx='1.5' fill='%23FFC107'/><polyline points='7,18 16,12 25,6' fill='none' stroke='rgba(255,255,255,0.35)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 
 <!-- Firebase SDK (compat v9) -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -1046,7 +1047,7 @@ function saveFirebaseConfig() {
       .then(() => {
         localStorage.setItem(FIREBASE_CONFIG_KEY, JSON.stringify(config));
         status.textContent = '✅ Подключено! Инициализация пользователей...';
-        initDefaultPins().then(() => showLoginStep());
+        initDefaultPins().then(() => loadManagers()).then(() => showLoginStep());
       })
       .catch(err => {
         status.textContent = '❌ Ошибка: ' + err.message;
@@ -1267,8 +1268,27 @@ async function loadRoles() {
 async function saveRoles() {
   if (DEMO_MODE || !DB) return;
   try {
-    await DB.collection('settings').doc('roles').set({ roles: PERSONAL_KPI });
+    // Firestore не поддерживает undefined — чистим перед сохранением
+    const clean = cleanForFirestore(PERSONAL_KPI);
+    await DB.collection('settings').doc('roles').set({ roles: clean });
   } catch(e) { console.error('saveRoles error', e); }
+}
+
+// Рекурсивно удаляет undefined-значения из объекта (Firestore не принимает undefined)
+function cleanForFirestore(obj) {
+  if (Array.isArray(obj)) {
+    return obj.map(cleanForFirestore);
+  }
+  if (obj !== null && typeof obj === 'object') {
+    const result = {};
+    for (const key of Object.keys(obj)) {
+      if (obj[key] !== undefined) {
+        result[key] = cleanForFirestore(obj[key]);
+      }
+    }
+    return result;
+  }
+  return obj;
 }
 
 // Получить следующий свободный ID
@@ -1577,8 +1597,8 @@ async function addKpiToRole(roleName) {
     dir: 'MAX',
     thr: 0.70,
     plan: 1.00,
-    str: 1.20,
-    w: undefined
+    str: 1.20
+    // w не задан — все KPI получат равный вес автоматически
   });
   await saveRoles();
   renderRolesAdmin();
@@ -1703,9 +1723,9 @@ function checkAndInit() {
     } catch(e) {}
   }
 
-  // Сразу переходим к экрану входа (без ввода конфига)
+  // Загружаем список менеджеров из Firestore, затем показываем экран входа
   document.getElementById('setupScreen').style.display = 'flex';
-  showLoginStep();
+  loadManagers().then(() => showLoginStep());
 }
 
 // ================================================================
