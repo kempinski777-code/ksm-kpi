@@ -921,7 +921,7 @@ let PERSONAL_KPI = {
     {name:'Поставки в срок',                   num:'Поставки в срок',           den:'Все поставки',    dir:'MAX', thr:0.80, plan:0.95, str:1.00},
     {name:'Потери по причине снабжения (н-ч)', num:'Н-ч потерь (абс.)',         den:null,              dir:'MIN', thr:80,   plan:30,   str:0,    abs:true},
     {name:'Качество входящих материалов',      num:'Поставки без замечаний',    den:'Все поставки',    dir:'MAX', thr:0.80, plan:0.95, str:1.00},
-    {name:'Оборачиваемость запасов (дни)',     num:'Средний запас',             den:'Среднесут. потр.',dir:'MIN', thr:45,   plan:30,   str:15},
+    {name:'Оборачиваемость запасов (дни)',     num:'Средний запас',             den:'Среднесут. потр.',dir:'MIN', thr:45,   plan:30,   str:15,   raw:true},
     {name:'Дисциплина закупок',               num:'Закупки по утв. заявкам',   den:'Все закупки',     dir:'MAX', thr:0.80, plan:0.95, str:1.00},
   ],
   'Руководитель ОТиТБ': [
@@ -1988,9 +1988,9 @@ function renderInput() {
           <td class="left">${kpi.name}<br><small style="color:#999;font-weight:400;font-size:10px">${kpi.num} / ${kpi.den||'база'}</small></td>
           <td${canEdit ? ' class="yellow-cell"' : ''}>${numInput}</td>
           <td${canEdit ? ' class="yellow-cell"' : ''}>${denInput}</td>
-          <td><span class="cell-formula" id="fact-p-${mgr.id}-${i}">${pct(fact)}</span></td>
+          <td><span class="cell-formula" id="fact-p-${mgr.id}-${i}">${kpi.raw ? (fact!==null?fact.toFixed(2):'—') : pct(fact)}</span></td>
           <td><span style="color:${kpi.dir==='MIN'?'#c00':'#060'};font-weight:700">${kpi.dir}</span></td>
-          <td>${pct(kpi.thr)}</td><td>${pct(kpi.plan)}</td><td>${pct(kpi.str)}</td>
+          <td>${kpi.raw?kpi.thr:pct(kpi.thr)}</td><td>${kpi.raw?kpi.plan:pct(kpi.plan)}</td><td>${kpi.raw?kpi.str:pct(kpi.str)}</td>
           <td><span class="cell-formula" id="norm-p-${mgr.id}-${i}">${pct(norm)}</span></td>
           <td>${pct(w)}</td>
         </tr>`;
@@ -2392,11 +2392,11 @@ function renderWeekly() {
       const contrib = d.norm !== null ? d.norm * wt : null;
       html += `<tr>
         <td>${i+1}</td><td class="left">${d.kpi.name}</td>
-        <td>${d.kpi.abs ? (d.fact!==null?d.fact:'—') : pct(d.fact)}</td>
+        <td>${(d.kpi.abs||d.kpi.raw) ? (d.fact!==null?(+d.fact).toFixed(2):'—') : pct(d.fact)}</td>
         <td style="color:${d.kpi.dir==='MIN'?'#c00':'#060'};font-weight:700">${d.kpi.dir}</td>
-        <td>${d.kpi.abs?d.kpi.thr:pct(d.kpi.thr)}</td>
-        <td>${d.kpi.abs?d.kpi.plan:pct(d.kpi.plan)}</td>
-        <td>${d.kpi.abs?d.kpi.str:pct(d.kpi.str)}</td>
+        <td>${(d.kpi.abs||d.kpi.raw)?d.kpi.thr:pct(d.kpi.thr)}</td>
+        <td>${(d.kpi.abs||d.kpi.raw)?d.kpi.plan:pct(d.kpi.plan)}</td>
+        <td>${(d.kpi.abs||d.kpi.raw)?d.kpi.str:pct(d.kpi.str)}</td>
         <td>${pct(d.norm)}</td>
         <td>${pct(wt)}</td>
         <td>${pct(contrib)}</td>
