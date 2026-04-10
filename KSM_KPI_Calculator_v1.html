@@ -71,6 +71,7 @@
     padding: 0 24px;
     border-top: 1px solid rgba(255,255,255,.1);
     overflow-x: auto;
+    position: sticky; top: 57px; z-index: 99;
   }
   nav.tabs button {
     background: transparent;
@@ -572,7 +573,7 @@
 </nav>
 
 <!-- ===== SHARED PERIOD BAR ===== -->
-<div class="week-bar" id="globalPeriodBar" style="margin:0;border-radius:0;border-top:none;position:sticky;top:57px;z-index:90;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.08)">
+<div class="week-bar" id="globalPeriodBar" style="margin:0;border-radius:0;border-top:none;position:sticky;top:98px;z-index:90;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.08)">
   <label><b>Период:</b></label>
   <select id="g-year" onchange="refreshAll()">
     <option>2026</option><option>2027</option><option>2028</option><option>2029</option><option>2030</option>
@@ -1923,7 +1924,7 @@ function renderInput() {
 
     // ---- Header ----
     const hdr = document.createElement('div');
-    hdr.className = 'mgr-header';
+    hdr.className = 'mgr-header collapsed-header';
     hdr.style.background = canEdit ? '' : '#4a6080'; // чужие — темнее
     hdr.innerHTML = `
       <span class="chevron">▼</span>
@@ -1939,7 +1940,7 @@ function renderInput() {
 
     // ---- Body ----
     const body = document.createElement('div');
-    body.className = 'mgr-body';
+    body.className = 'mgr-body collapsed';
     body.id = `mgr-body-${mgr.id}`;
 
     // --- БЛОК А: Личные KPI ---
