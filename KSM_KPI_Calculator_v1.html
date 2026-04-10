@@ -1164,6 +1164,9 @@ function finishLogin(mgr, demo) {
   loadManagers().then(() => loadRoles()).then(() => loadState()).then(() => {
     populateWeekSelects();
     setCurrentPeriod();
+    // Стартовая вкладка — дашборд: скрываем селектор квартала
+    const qSelInit = document.getElementById('g-quarter');
+    if (qSelInit) qSelInit.style.display = 'none';
     syncPeriod();
     const now = new Date();
     document.getElementById('lastUpdate').textContent =
@@ -1861,47 +1864,108 @@ function badge(v) {
 // GET CURRENT PERIOD
 // ================================================================
 
-function getYear()    { return parseInt(document.getElementById('g-year')?.value || 2026); }
-function getQuarter() { return document.getElementById('g-quarter')?.value || 'Q1'; }
-function getWeek()    { return parseInt(document.getElementById('g-week')?.value || 1); }
+// ================================================================
+// WEEK MODEL
+// ================================================================
+// UI показывает сквозные недели 1..52, но внутри всё считается парой
+// (квартал Q1..Q4, неделя-в-квартале 1..13). Формат ключей STATE не меняется.
+// Неделя начинается в СРЕДУ и заканчивается во ВТОРНИК.
+// Анкор года — ближайшая среда на 1 января или до него (dow 3 = Wed).
+const WEEKS_PER_QUARTER = 13;
+const WEEKS_PER_YEAR = 52;
 
-function syncPeriod() {
-  const yr = getYear(), qr = getQuarter(), wk = getWeek();
-  const hp = document.getElementById('headerPeriod');
-  if(hp) hp.textContent = `${qr} ${yr} · Неделя ${wk}`;
+function absWeekToQW(absW) {
+  const a = Math.min(WEEKS_PER_YEAR, Math.max(1, parseInt(absW) || 1));
+  const qIdx = Math.floor((a - 1) / WEEKS_PER_QUARTER);
+  const wInQ = ((a - 1) % WEEKS_PER_QUARTER) + 1;
+  return { quarter: 'Q' + (qIdx + 1), weekInQuarter: wInQ };
+}
+function qwToAbsWeek(quarter, weekInQuarter) {
+  const qIdx = (parseInt(String(quarter).substring(1)) || 1) - 1;
+  return qIdx * WEEKS_PER_QUARTER + (parseInt(weekInQuarter) || 1);
+}
+
+// Абсолютный номер недели (1..52) для заданной даты — неделя начинается в СРЕДУ
+function getAbsWeekOfDate(date) {
+  const year = date.getFullYear();
+  const jan1 = new Date(year, 0, 1);
+  const dow = jan1.getDay(); // 0..6 (Sun..Sat), 3 = Wed
+  const daysBack = (dow - 3 + 7) % 7; // сколько дней назад до предыдущей среды (0 если само Ср)
+  const anchor = new Date(year, 0, 1 - daysBack);
+  const diffDays = Math.floor((date.getTime() - anchor.getTime()) / 86400000);
+  let absW = Math.floor(diffDays / 7) + 1;
+  if (absW < 1) absW = 1;
+  if (absW > WEEKS_PER_YEAR) absW = WEEKS_PER_YEAR;
+  return absW;
 }
 
 // ================================================================
-// POPULATE WEEK SELECTS
+// GETTERS — актуальный период из селекторов
+// ================================================================
+function getYear()    { return parseInt(document.getElementById('g-year')?.value || 2026); }
+
+// На вкладке "Квартальный отчёт" квартал берётся из селектора g-quarter.
+// На остальных вкладках — выводится из выбранной абсолютной недели.
+function getQuarter() {
+  const activePanel = document.querySelector('.tab-panel.active');
+  if (activePanel && activePanel.id === 'tab-quarterly') {
+    return document.getElementById('g-quarter')?.value || 'Q1';
+  }
+  const absW = parseInt(document.getElementById('g-week')?.value || 1);
+  return absWeekToQW(absW).quarter;
+}
+
+// Неделя-в-квартале — внутренняя величина (1..13), выводится из абсолютной недели g-week
+function getWeek() {
+  const absW = parseInt(document.getElementById('g-week')?.value || 1);
+  return absWeekToQW(absW).weekInQuarter;
+}
+
+// Абсолютная неделя года (1..52) — напрямую из селектора
+function getAbsWeek() {
+  return parseInt(document.getElementById('g-week')?.value || 1);
+}
+
+function syncPeriod() {
+  const yr = getYear();
+  const hp = document.getElementById('headerPeriod');
+  if (!hp) return;
+  const activePanel = document.querySelector('.tab-panel.active');
+  const isQuarterly = activePanel && activePanel.id === 'tab-quarterly';
+  if (isQuarterly) {
+    const qr = document.getElementById('g-quarter')?.value || 'Q1';
+    hp.textContent = `${qr} ${yr}`;
+  } else {
+    const absW = getAbsWeek();
+    hp.textContent = `${yr} · Неделя ${absW}`;
+  }
+}
+
+// ================================================================
+// POPULATE WEEK SELECTS (сквозная нумерация 1..52)
 // ================================================================
 function populateWeekSelects() {
   const sel = document.getElementById('g-week');
   if (!sel) return;
   sel.innerHTML = '';
-  for (let w = 1; w <= 13; w++) {
+  for (let w = 1; w <= WEEKS_PER_YEAR; w++) {
     const opt = document.createElement('option');
     opt.value = w; opt.textContent = w;
     sel.appendChild(opt);
   }
 }
 
-// Determine current year / quarter / week-in-quarter from today's date
+// Определяет текущие год и абсолютную неделю (Ср-Вт) из сегодняшней даты
 function getCurrentPeriod() {
   const now = new Date();
   const year = now.getFullYear();
-  const month = now.getMonth(); // 0-11
-  const qIdx = Math.floor(month / 3); // 0..3
-  const quarter = 'Q' + (qIdx + 1);
-  const qStart = new Date(year, qIdx * 3, 1);
-  const daysSinceQStart = Math.floor((now - qStart) / 86400000);
-  let week = Math.floor(daysSinceQStart / 7) + 1;
-  if (week < 1) week = 1;
-  if (week > 13) week = 13;
-  return { year, quarter, week };
+  const absWeek = getAbsWeekOfDate(now);
+  const { quarter, weekInQuarter } = absWeekToQW(absWeek);
+  return { year, quarter, week: weekInQuarter, absWeek };
 }
 
 function setCurrentPeriod() {
-  const { year, quarter, week } = getCurrentPeriod();
+  const { year, quarter, absWeek } = getCurrentPeriod();
   const ySel = document.getElementById('g-year');
   const qSel = document.getElementById('g-quarter');
   const wSel = document.getElementById('g-week');
@@ -1909,7 +1973,7 @@ function setCurrentPeriod() {
     ySel.value = year;
   }
   if (qSel) qSel.value = quarter;
-  if (wSel) wSel.value = week;
+  if (wSel) wSel.value = absWeek;
 }
 
 // ================================================================
@@ -2347,8 +2411,9 @@ function renderDashboard() {
     </div>`;
   });
 
-  // Quarter dynamic mini table
+  // Quarter dynamic mini table — показываем АБСОЛЮТНЫЕ номера недель
   const qd = document.getElementById('quarterDynamic');
+  const firstAbsDash = qwToAbsWeek(q, 1);
   let rows = '';
   for (let wk=1; wk<=13; wk++) {
     let avgFins = [];
@@ -2362,8 +2427,9 @@ function renderDashboard() {
     });
     const avg = avgFins.length ? avgFins.reduce((a,b)=>a+b,0)/avgFins.length : null;
     const isCurrentWeek = wk === w;
+    const absLabel = firstAbsDash + wk - 1;
     rows += `<tr ${isCurrentWeek?'style="background:#EEF6FF;font-weight:700"':''}>
-      <td>Неделя ${wk}${isCurrentWeek?' ◀':''}</td>
+      <td>Неделя ${absLabel}${isCurrentWeek?' ◀':''}</td>
       <td>${badge(avg)}</td>
       <td>${avg!==null?avgFins.length+' руков.':'—'}</td>
     </tr>`;
@@ -2478,10 +2544,11 @@ function renderWeekly() {
 // ================================================================
 function renderQuarterly() {
   const year=getYear(), q=getQuarter();
+  const firstAbs = qwToAbsWeek(q, 1); // 1, 14, 27 или 40
 
   // Section 1: Summary
   const summaryTbl = document.getElementById('quarterSummary');
-  const wkHeaders = Array.from({length:13},(_,i)=>`<th>Н.${i+1}</th>`).join('');
+  const wkHeaders = Array.from({length:13},(_,i)=>`<th>Н.${firstAbs+i}</th>`).join('');
   summaryTbl.querySelector('thead').innerHTML =
     `<tr><th class="left">ФИО</th><th class="left">Должность</th>${wkHeaders}<th>Среднее</th><th>Мин. SG</th><th>Квартал</th></tr>`;
 
@@ -2519,7 +2586,7 @@ function renderQuarterly() {
 
   // Section 2: Team KPI
   const teamTbl = document.getElementById('teamKpiQuarter');
-  const wkH2 = Array.from({length:13},(_,i)=>`<th>Н.${i+1}</th>`).join('');
+  const wkH2 = Array.from({length:13},(_,i)=>`<th>Н.${firstAbs+i}</th>`).join('');
   teamTbl.querySelector('thead').innerHTML = `<tr><th class="left">Командный KPI</th>${wkH2}<th>Среднее</th><th>vs. План</th></tr>`;
   const tbody2 = teamTbl.querySelector('tbody');
   tbody2.innerHTML = '';
@@ -2731,12 +2798,23 @@ function showTab(name) {
   event.currentTarget.classList.add('active');
   syncPeriod();
 
-  // На квартальном отчёте неделя не нужна — скрываем селектор недели
+  // Квартальный отчёт: показываем только квартал (без недели).
+  // Остальные вкладки: только абсолютная неделя (без квартала — он вычисляется автоматически).
   const weekSel = document.getElementById('g-week');
   const weekLbl = document.getElementById('g-week-label');
-  const hideWeek = (name === 'quarterly');
-  if (weekSel) weekSel.style.display = hideWeek ? 'none' : '';
-  if (weekLbl) weekLbl.style.display = hideWeek ? 'none' : '';
+  const qSel    = document.getElementById('g-quarter');
+  const isQuarterly = (name === 'quarterly');
+  if (weekSel) weekSel.style.display = isQuarterly ? 'none' : '';
+  if (weekLbl) weekLbl.style.display = isQuarterly ? 'none' : '';
+  if (qSel)    qSel.style.display    = isQuarterly ? '' : 'none';
+
+  // При уходе с квартального отчёта — подстраиваем g-week под первый день выбранного квартала,
+  // а при входе на квартальный — подстраиваем g-quarter под выбранную неделю.
+  if (isQuarterly) {
+    const { quarter } = absWeekToQW(getAbsWeek());
+    if (qSel && qSel.value !== quarter) qSel.value = quarter;
+  }
+  syncPeriod();
 
   if (name === 'input')     renderInput();
   if (name === 'weekly')    renderWeekly();
@@ -2803,7 +2881,7 @@ async function saveData() {
   }
 
   renderHistory();
-  alert(`✅ Данные недели ${w} сохранены (${ACTIVE.length} руководителей).`);
+  alert(`✅ Данные недели ${qwToAbsWeek(q,w)} сохранены (${ACTIVE.length} руководителей).`);
 }
 
 async function renderHistory() {
