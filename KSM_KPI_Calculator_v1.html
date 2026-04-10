@@ -582,7 +582,7 @@
     <option value="Q1">Q1</option><option value="Q2">Q2</option>
     <option value="Q3">Q3</option><option value="Q4">Q4</option>
   </select>
-  <label>Неделя:</label>
+  <label id="g-week-label">Неделя:</label>
   <select id="g-week" onchange="refreshAll()"></select>
   <button class="btn btn-primary btn-sm" onclick="refreshAll()">🔄 Обновить</button>
   <span style="margin-left:auto;font-size:11px;color:#888">Обновлено: <span id="lastUpdate"></span></span>
@@ -2736,6 +2736,13 @@ function showTab(name) {
   document.getElementById(`tab-${name}`).classList.add('active');
   event.currentTarget.classList.add('active');
   syncPeriod();
+
+  // На квартальном отчёте неделя не нужна — скрываем селектор недели
+  const weekSel = document.getElementById('g-week');
+  const weekLbl = document.getElementById('g-week-label');
+  const hideWeek = (name === 'quarterly');
+  if (weekSel) weekSel.style.display = hideWeek ? 'none' : '';
+  if (weekLbl) weekLbl.style.display = hideWeek ? 'none' : '';
 
   if (name === 'input')     renderInput();
   if (name === 'weekly')    renderWeekly();
