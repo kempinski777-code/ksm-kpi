@@ -1162,6 +1162,7 @@ function finishLogin(mgr, demo) {
   // Init — загружаем менеджеров, потом роли/KPI, потом данные
   loadManagers().then(() => loadRoles()).then(() => loadState()).then(() => {
     populateWeekSelects();
+    setCurrentPeriod();
     syncPeriod();
     const now = new Date();
     document.getElementById('lastUpdate').textContent =
@@ -1858,6 +1859,33 @@ function populateWeekSelects() {
     opt.value = w; opt.textContent = w;
     sel.appendChild(opt);
   }
+}
+
+// Determine current year / quarter / week-in-quarter from today's date
+function getCurrentPeriod() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth(); // 0-11
+  const qIdx = Math.floor(month / 3); // 0..3
+  const quarter = 'Q' + (qIdx + 1);
+  const qStart = new Date(year, qIdx * 3, 1);
+  const daysSinceQStart = Math.floor((now - qStart) / 86400000);
+  let week = Math.floor(daysSinceQStart / 7) + 1;
+  if (week < 1) week = 1;
+  if (week > 13) week = 13;
+  return { year, quarter, week };
+}
+
+function setCurrentPeriod() {
+  const { year, quarter, week } = getCurrentPeriod();
+  const ySel = document.getElementById('g-year');
+  const qSel = document.getElementById('g-quarter');
+  const wSel = document.getElementById('g-week');
+  if (ySel && [...ySel.options].some(o => o.value == year || o.text == year)) {
+    ySel.value = year;
+  }
+  if (qSel) qSel.value = quarter;
+  if (wSel) wSel.value = week;
 }
 
 // ================================================================
