@@ -2326,16 +2326,12 @@ function renderDashboard() {
   // Team KPI progress bars
   const tkDash = document.getElementById('teamKpiDash');
   tkDash.innerHTML = '';
-  // Aggregate team KPI from all managers (average)
+  // Командные KPI — общие, читаем только из записи COO
+  const sharedTeam = getSharedTeamData(year, q, w);
   TEAM_KPIS.forEach((tkpi, ti) => {
-    let facts = [];
-    ACTIVE.forEach(mgr => {
-      const data = getWeekData(year, q, w, mgr.id);
-      const num = parseFloat(data.team.num[ti]);
-      const den = parseFloat(data.team.den[ti]);
-      if (!isNaN(num) && !isNaN(den) && den !== 0) facts.push(num/den);
-    });
-    const avgFact = facts.length ? facts.reduce((a,b)=>a+b,0)/facts.length : null;
+    const num = parseFloat(sharedTeam.num[ti]);
+    const den = parseFloat(sharedTeam.den[ti]);
+    const avgFact = (!isNaN(num) && !isNaN(den) && den !== 0) ? num/den : null;
     const norm = avgFact !== null ? normalize(avgFact, tkpi.thr, tkpi.plan, tkpi.str, tkpi.dir) : null;
     const pctW = norm !== null ? Math.min(norm/1.2*100,100) : 0;
     const barColor = norm===null?'#ddd':norm>=1?'#00B050':norm>=0.8?'#FFC107':norm>=0.5?'#FF9800':'#F44336';
@@ -2531,14 +2527,12 @@ function renderQuarterly() {
   TEAM_KPIS.forEach((tkpi, ti) => {
     let weekFacts = [];
     for (let w=1; w<=13; w++) {
-      let facts = [];
-      ACTIVE.forEach(mgr => {
-        const data = getWeekData(year, q, w, mgr.id);
-        const num = parseFloat(data.team.num[ti]);
-        const den = parseFloat(data.team.den[ti]);
-        if (!isNaN(num) && !isNaN(den) && den !== 0) facts.push(num/den);
-      });
-      weekFacts.push(facts.length ? facts.reduce((a,b)=>a+b,0)/facts.length : null);
+      // Командные KPI — общие, читаем только из записи COO
+      const shared = getSharedTeamData(year, q, w);
+      const num = parseFloat(shared.num[ti]);
+      const den = parseFloat(shared.den[ti]);
+      const fact = (!isNaN(num) && !isNaN(den) && den !== 0) ? num/den : null;
+      weekFacts.push(fact);
     }
     const valid = weekFacts.filter(v=>v!==null);
     const avg = valid.length ? valid.reduce((a,b)=>a+b,0)/valid.length : null;
