@@ -1251,7 +1251,7 @@ async function saveManagers() {
 // ROLES / KPI — загрузка и сохранение в Firestore
 // ================================================================
 async function loadRoles() {
-  if (DEMO_MODE || !DB) return; // используем встроенный PERSONAL_KPI
+  if (DEMO_MODE || !DB) { migrateRoles(); return; }
   try {
     const doc = await DB.collection('settings').doc('roles').get();
     if (doc.exists && doc.data().roles) {
@@ -1260,11 +1260,34 @@ async function loadRoles() {
       // Overwrite built-in with saved (admin may have edited them)
       Object.assign(PERSONAL_KPI, saved);
       console.log('Должности загружены из Firestore:', Object.keys(PERSONAL_KPI).length);
+      // Патч: применяем обязательные флаги из кода поверх старых данных
+      if (migrateRoles()) {
+        await saveRoles();
+        console.log('Миграция ролей сохранена обратно в Firestore');
+      }
     } else {
       // First run — save current built-in to Firestore
       await saveRoles();
     }
   } catch(e) { console.warn('loadRoles error', e); }
+}
+
+// Проставляет обязательные флаги (raw, abs) для KPI, которые были сохранены в старом формате.
+// Возвращает true, если что-то изменилось.
+function migrateRoles() {
+  const RAW_KPI_NAMES = new Set([
+    'Оборачиваемость запасов (дни)',
+  ]);
+  let changed = false;
+  Object.keys(PERSONAL_KPI).forEach(role => {
+    (PERSONAL_KPI[role] || []).forEach(kpi => {
+      if (kpi && RAW_KPI_NAMES.has(kpi.name) && !kpi.raw) {
+        kpi.raw = true;
+        changed = true;
+      }
+    });
+  });
+  return changed;
 }
 
 async function saveRoles() {
