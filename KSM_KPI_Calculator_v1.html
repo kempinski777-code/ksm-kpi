@@ -2359,7 +2359,7 @@ function renderDashboard() {
     ACTIVE.forEach(mgr => {
       const d = getWeekData(year, q, wk, mgr.id);
       const pRes = calcPersonalKPI(mgr, d);
-      const tRes = calcTeamKPI(d);
+      const tRes = calcTeamKPI(d, year, q, wk);
       const sg   = calcSG(d.sg, d.repeatB);
       const fin  = calcFinalKPI(pRes.total, tRes.total, sg);
       if (fin !== null) avgFins.push(fin);
@@ -2497,7 +2497,7 @@ function renderQuarterly() {
     for (let w=1; w<=13; w++) {
       const data = getWeekData(year, q, w, mgr.id);
       const pRes = calcPersonalKPI(mgr, data);
-      const tRes = calcTeamKPI(data);
+      const tRes = calcTeamKPI(data, year, q, w);
       const sgC  = calcSG(data.sg, data.repeatB);
       const fin  = calcFinalKPI(pRes.total, tRes.total, sgC);
       weekKPIs.push(fin);
